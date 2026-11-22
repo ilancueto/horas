@@ -1,6 +1,7 @@
 import Dexie, { type EntityTable } from 'dexie'
 import { create } from 'zustand'
 import { z } from 'zod'
+import { nationalHolidays } from '../domain/holidays'
 import { collections, emptyLedger, emptyPrivate, defaults, privateSchema, settingsSchema, type Collection, type Item, type Ledger, type PrivateData, type Settings } from '../domain/model'
 
 export type Row = { id: string; collection: Collection; data: Item; deleted: boolean; revision: string; updatedAt?: string }
@@ -44,6 +45,12 @@ export function notify(notice: string) { useHours.setState({ notice }) }
 export async function reload() { useHours.setState({ ledger: await readLedger() }) }
 export async function initialize() {
   try {
+    await db.transaction('rw',db.records,db.meta,async()=>{
+      if(await db.meta.get('holidaysSeeded')) return
+      const dates=new Set((await db.records.where('collection').equals('holidays').toArray()).map(row=>('date' in row.data)?row.data.date:''))
+      await db.records.bulkPut(nationalHolidays().filter(h=>!dates.has(h.date)).map(data=>({id:data.id,collection:'holidays',data,deleted:false,revision:crypto.randomUUID()})))
+      await putMeta('holidaysSeeded',true)
+    })
     const [ledger, settings, privateData, backupAt] = await Promise.all([
       readLedger(), getMeta('settings', settingsSchema, defaults),
       getMeta('private', privateSchema, emptyPrivate), getMeta('backupAt', z.string(), ''),

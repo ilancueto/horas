@@ -8,8 +8,9 @@ import { Dialog } from './base'
 import { DayEditor } from './Day'
 import { PeriodEditor, PeriodView } from './Period'
 import { Annual, Calendar } from './Calendar'
+import { Absences, type AbsenceView } from './Absences'
 
-type View = 'period'|'calendar'|'annual'|'more'
+type View = 'period'|'calendar'|'annual'|'more'|AbsenceView
 const nav = [
   ['period','Período',ListChecks], ['calendar','Calendario',CalendarDays],
   ['annual','Resumen anual',Activity], ['more','Más',Menu],
@@ -68,7 +69,8 @@ export function App() {
         {view==='period'&&<PeriodView period={period} periods={periods} rows={rows} today={now} choose={choose} edit={()=>setDraft(period)} add={()=>setDraft(suggestPeriod(periods,settings,now))} openDay={openDay} report={()=>setModal('report')}/>}
         {view==='calendar'&&<Calendar today={now} open={openDay}/>}
         {view==='annual'&&<Annual today={now} choose={choose}/>}
-        {view==='more'&&<section className="stack"><h1>Más</h1><div className="panel actions"><button onClick={()=>setModal('settings')}><SettingsIcon size={18}/> Ajustes</button><button onClick={()=>setModal('help')}><HelpCircle size={18}/> Ayuda</button></div></section>}
+        {(view==='comps'||view==='leaves'||view==='holidays')&&<Absences key={view} view={view} today={now}/>}
+        {view==='more'&&<section className="stack"><h1>Más</h1><div className="panel actions"><button onClick={()=>move('comps')}>Compensatorio</button><button onClick={()=>move('leaves')}>Vacaciones</button><button onClick={()=>move('holidays')}>Feriados</button><button onClick={()=>setModal('settings')}><SettingsIcon size={18}/> Ajustes</button><button onClick={()=>setModal('help')}><HelpCircle size={18}/> Ayuda</button></div></section>}
       </div>
     </main>
     <nav className="bottom-nav" aria-label="Navegación móvil">{nav.map(([value,label,Icon])=><button key={value} aria-current={view===value?'page':undefined} onClick={()=>move(value)}><Icon size={20}/>{value==='annual'?'Resumen':label}</button>)}</nav>
