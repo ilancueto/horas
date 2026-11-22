@@ -8,6 +8,7 @@ import { Dialog } from './base'
 import { DayEditor } from './Day'
 import { PeriodEditor, PeriodView } from './Period'
 import { Annual, Calendar } from './Calendar'
+import { DataTools, ImportExcel, Report } from './Transfer'
 import { Absences, type AbsenceView } from './Absences'
 
 type View = 'period'|'calendar'|'annual'|'more'|AbsenceView
@@ -70,7 +71,7 @@ export function App() {
         {view==='calendar'&&<Calendar today={now} open={openDay}/>}
         {view==='annual'&&<Annual today={now} choose={choose}/>}
         {(view==='comps'||view==='leaves'||view==='holidays')&&<Absences key={view} view={view} today={now}/>}
-        {view==='more'&&<section className="stack"><h1>Más</h1><div className="panel actions"><button onClick={()=>move('comps')}>Compensatorio</button><button onClick={()=>move('leaves')}>Vacaciones</button><button onClick={()=>move('holidays')}>Feriados</button><button onClick={()=>setModal('settings')}><SettingsIcon size={18}/> Ajustes</button><button onClick={()=>setModal('help')}><HelpCircle size={18}/> Ayuda</button></div></section>}
+        {view==='more'&&<section className="stack"><h1>Más</h1><div className="panel actions"><button onClick={()=>move('comps')}>Compensatorio</button><button onClick={()=>move('leaves')}>Vacaciones</button><button onClick={()=>move('holidays')}>Feriados</button><button onClick={()=>setModal('settings')}><SettingsIcon size={18}/> Ajustes</button><button onClick={()=>setModal('help')}><HelpCircle size={18}/> Ayuda</button></div><DataTools today={now} openImport={()=>setModal('import')}/></section>}
       </div>
     </main>
     <nav className="bottom-nav" aria-label="Navegación móvil">{nav.map(([value,label,Icon])=><button key={value} aria-current={view===value?'page':undefined} onClick={()=>move(value)}><Icon size={20}/>{value==='annual'?'Resumen':label}</button>)}</nav>
@@ -78,7 +79,8 @@ export function App() {
     {day&&dayPeriod&&<DayEditor key={day} date={day} period={dayPeriod} close={()=>setDay('')} previous={ledger.entries.find(e=>e.date===addDays(day,-1))}/>}
     {modal==='settings'&&<Dialog title="Ajustes" close={()=>setModal('')}><label><Sun size={17}/> Tema<select value={settings.theme} onChange={e=>void saveSettings({theme:e.target.value as typeof settings.theme})}><option value="auto">Automático</option><option value="light">Claro</option><option value="dark">Oscuro</option></select></label></Dialog>}
     {modal==='help'&&<Dialog title="Ayuda" close={()=>setModal('')}><p><Timer size={18}/> Usá la grilla o el botón Hoy para registrar entradas y salidas.</p></Dialog>}
-    {modal==='report'&&<Dialog title="Resumen para RRHH" close={()=>setModal('')}><p>{rows.length} días en el período.</p></Dialog>}
+    {modal==='report'&&period&&<Report period={period} rows={rows} close={()=>setModal('')}/>} 
+    {modal==='import'&&<ImportExcel close={()=>setModal('')} onDone={()=>move('period')}/>}
     {notice&&<div className="toast" role="status"><span>{notice}</span>{past.length>0&&<button onClick={()=>void undo()}>Deshacer</button>}<button className="icon" aria-label="Cerrar aviso" onClick={()=>notify('')}>×</button></div>}
   </div>
 }

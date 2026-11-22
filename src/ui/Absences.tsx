@@ -4,7 +4,7 @@ import { daysBetween, fmtDate } from '../domain/dates'
 import { calculate, holidayMap, leaveBalance, overlapsLeave } from '../domain/hours'
 import { collections, type Holiday, type Item } from '../domain/model'
 import { holidayId } from '../domain/holidays'
-import { apply, notify, useHours } from '../data/db'
+import { apply, useHours } from '../data/db'
 import { Dialog, Empty } from './base'
 
 export type AbsenceView = 'comps'|'leaves'|'holidays'
