@@ -2,15 +2,14 @@
   "name": "horarios",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
   "scripts": {
-    "test": "vitest run --passWithNoTests",
+    "test": "vitest run",
     "dev": "vite --host 127.0.0.1",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview --host 127.0.0.1",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test:e2e": "playwright test",
+    "test:e2e": "npm run build && playwright test",
     "format": "prettier --write src tests"
   },
   "keywords": [],
@@ -20,7 +19,7 @@
   "dependencies": {
     "@fontsource-variable/fraunces": "^5.3.0",
     "@fontsource-variable/inter": "^5.3.0",
-    "@supabase/supabase-js": "^2.119.2",
+    "@supabase/supabase-js": "2.119.2",
     "dexie": "^4.4.7",
     "jspdf": "^4.2.1",
     "lucide-react": "^1.77.0",
@@ -31,6 +30,8 @@
     "zustand": "^5.1.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.14.0",
+    "@electric-sql/pglite": "^0.5.17",
     "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.65.1",
     "@tailwindcss/vite": "^4.3.5",
@@ -47,5 +48,6 @@
     "vite": "^8.3.8",
     "vite-plugin-pwa": "^2.0.0",
     "vitest": "^5.1.1"
-  }
+  },
+  "private": true
 }
