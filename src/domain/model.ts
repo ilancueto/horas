@@ -15,12 +15,20 @@ export const settingsSchema = z.object({
 export const defaults: Settings = {
   start: 465, end: 1005, breakMinutes: 60, saturday: 780, early: 'extra',
   nonWorking: false, closing: 14, annualLeave: 14, lockClosed: true,
-  theme: 'auto', format: 'clock', onboarded: false,
+  theme: 'auto', format: 'both', onboarded: false,
   dailyReminder: false, reminderTime: 1080, closingReminder: 0,
 }
 export type Settings = z.infer<typeof settingsSchema>
+export const rulesId = '30000000-0000-4000-8000-000000000001'
+export const rulesSchema = settingsSchema.pick({
+  start: true, end: true, breakMinutes: true, saturday: true, early: true,
+  nonWorking: true, closing: true, annualLeave: true, lockClosed: true,
+})
+export const rulesRecordSchema = rulesSchema.extend({ id }).refine(rules => rules.start < rules.end)
+export type RulesRecord = z.infer<typeof rulesRecordSchema>
 export const periodSchema = z.object({
   id, from: day, to: day, status: z.enum(['Abierto', 'Enviado a RRHH', 'Pagado']),
+  excel: z.object({normal:z.number(),extra:z.number(),double:z.number(),total:z.number()}).optional(),
 }).refine(p => p.from <= p.to).refine(p => p.from.slice(0, 4) >= '1900' && p.to.slice(0, 4) <= '2199')
 export const entrySchema = z.object({
   id, date: day, start: minute.nullable(), end: minute.nullable(),
@@ -49,6 +57,7 @@ export const privateSchema = z.object({
 })
 export type PrivateData = z.infer<typeof privateSchema>
 export const emptyPrivate: PrivateData = { rate: null, receipt: {} }
+export const periodId = (date: string) => '20000000-0000-4000-8000-0000' + date.replaceAll('-', '')
 export function blankEntry(date: string, settings: Settings): Entry {
-  return { id: crypto.randomUUID(), date, start: null, end: null, notes: '', guard: false, breakMinutes: settings.breakMinutes }
+  return { id: '10000000-0000-4000-8000-0000' + date.replaceAll('-', ''), date, start: null, end: null, notes: '', guard: false, breakMinutes: settings.breakMinutes }
 }

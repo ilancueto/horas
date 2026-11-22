@@ -2,9 +2,9 @@ import Dexie, { type EntityTable } from 'dexie'
 import { create } from 'zustand'
 import { z } from 'zod'
 import { nationalHolidays } from '../domain/holidays'
-import { collections, emptyLedger, emptyPrivate, defaults, privateSchema, settingsSchema, type Collection, type Item, type Ledger, type PrivateData, type Settings } from '../domain/model'
+import { collections, emptyLedger, emptyPrivate, defaults, privateSchema, settingsSchema, rulesId, rulesSchema, rulesRecordSchema, type RulesRecord, type Collection, type Item, type Ledger, type PrivateData, type Settings } from '../domain/model'
 
-export type Row = { id: string; collection: Collection; data: Item; deleted: boolean; revision: string; updatedAt?: string }
+export type Row = { id: string; collection: Collection | 'rules'; data: Item | RulesRecord; deleted: boolean; revision: string; updatedAt?: string }
 class HoursDB extends Dexie {
   records!: EntityTable<Row, 'id'>
   queue!: EntityTable<Row, 'id'>
@@ -25,7 +25,7 @@ export const putMeta = (key: string, value: unknown) => db.meta.put({ key, value
 export async function readLedger() {
   const ledger: Ledger = structuredClone(emptyLedger)
   for (const row of await db.records.toArray()) {
-    if (row.deleted || !Object.hasOwn(collections, row.collection)) continue
+    if (row.deleted || row.collection === 'rules' || !Object.hasOwn(collections, row.collection)) continue
     const result = collections[row.collection].safeParse(row.data)
     if (result.success) (ledger[row.collection] as Item[]).push(result.data)
   }
@@ -35,14 +35,26 @@ export type Change = { collection: Collection; item: Item; deleted?: boolean }
 type History = { before: Change[]; after: Change[] }
 type Store = {
   ledger: Ledger; settings: Settings; privateData: PrivateData; ready: boolean; error: string;
-  past: History[]; future: History[]; notice: string; backupAt: string;
+  past: History[]; future: History[]; notice: string; undoNotice: boolean; backupAt: string;
 }
 export const useHours = create<Store>(() => ({
   ledger: emptyLedger, settings: defaults, privateData: emptyPrivate, ready: false,
-  error: '', past: [], future: [], notice: '', backupAt: '',
+  error: '', past: [], future: [], notice: '', undoNotice: false, backupAt: '',
 }))
-export function notify(notice: string) { useHours.setState({ notice }) }
-export async function reload() { useHours.setState({ ledger: await readLedger() }) }
+export function notify(notice: string) { useHours.setState({ notice, undoNotice: false }) }
+async function readSettings() {
+  const local = await getMeta('settings', settingsSchema, defaults)
+  const stored = await db.records.get(rulesId)
+  const rules = rulesRecordSchema.safeParse(stored?.deleted ? undefined : stored?.data)
+  if (!rules.success) return local
+  const { id, ...shared } = rules.data
+  void id
+  return { ...local, ...shared }
+}
+export async function reload() {
+  const [ledger, settings] = await Promise.all([readLedger(), readSettings()])
+  useHours.setState({ ledger, settings })
+}
 export async function initialize() {
   try {
     await db.transaction('rw',db.records,db.meta,async()=>{
@@ -52,7 +64,7 @@ export async function initialize() {
       await putMeta('holidaysSeeded',true)
     })
     const [ledger, settings, privateData, backupAt] = await Promise.all([
-      readLedger(), getMeta('settings', settingsSchema, defaults),
+      readLedger(), readSettings(),
       getMeta('private', privateSchema, emptyPrivate), getMeta('backupAt', z.string(), ''),
     ])
     useHours.setState({ ledger, settings, privateData, backupAt, ready: true, error: '' })
@@ -73,11 +85,19 @@ export function apply(changes: Change[] | (() => Change[]), message = 'Cambios g
         const rows = after.map(c => ({ id: c.item.id, collection: c.collection, data: c.item, deleted: c.deleted ?? false, revision: crypto.randomUUID() }))
         await db.records.bulkPut(rows)
         await db.queue.bulkPut(rows)
-        return after.map((c, index) => ({ collection: c.collection, item: old[index]?.data ?? c.item, deleted: old[index]?.deleted ?? !old[index] }))
+        return after.map((change,index)=>{
+          const previous=old[index]
+          const stored=collections[change.collection].safeParse(previous?.data)
+          return {
+            collection:change.collection,
+            item:stored.success ? stored.data : change.item,
+            deleted:previous?.deleted ?? !previous,
+          }
+        })
       })
       await reload()
       useHours.setState(s => ({
-        notice: message, past: history ? [...s.past.slice(-39), { before, after }] : s.past,
+        notice: message, undoNotice: history, past: history ? [...s.past.slice(-39), { before, after }] : s.past,
         future: history ? [] : s.future,
       }))
       return true
@@ -95,9 +115,23 @@ export async function undo(redo = false) {
 export async function saveSettings(patch: Partial<Settings>) {
   const settings = settingsSchema.parse({ ...useHours.getState().settings, ...patch })
   if (settings.start >= settings.end) { notify('La salida habitual tiene que ser posterior a la entrada.'); return false }
-  await putMeta('settings', settings)
-  useHours.setState({ settings })
+  await serial(async () => {
+    const previous = useHours.getState().settings
+    const rules = rulesSchema.parse(settings)
+    const changed = JSON.stringify(rules) !== JSON.stringify(rulesSchema.parse(previous))
+    await db.transaction('rw',db.meta,db.records,db.queue,async()=>{
+      await putMeta('settings', settings)
+      if (changed) {
+        const data = rulesRecordSchema.parse({id:rulesId,...rules})
+        const row:Row = {id:rulesId,collection:'rules', data, deleted:false, revision:crypto.randomUUID()}
+        await db.records.put(row)
+        await db.queue.put(row)
+      }
+    })
+    useHours.setState({ settings })
+  })
   return true
+
 }
 export async function savePrivate(privateData: PrivateData) {
   await putMeta('private', privateSchema.parse(privateData))
