@@ -64,10 +64,10 @@ function serial<T>(operation: () => Promise<T>) {
   changesPending = next.catch(() => undefined)
   return next
 }
-export function apply(changes: Change[], message = 'Cambios guardados', history = true) {
+export function apply(changes: Change[] | (() => Change[]), message = 'Cambios guardados', history = true) {
   return serial(async () => {
     try {
-      const after = changes.map(c => ({ ...c, item: collections[c.collection].parse(c.item) }))
+      const after = (typeof changes === 'function' ? changes() : changes).map(c => ({ ...c, item: collections[c.collection].parse(c.item) }))
       const before = await db.transaction('rw', db.records, db.queue, async () => {
         const old = await db.records.bulkGet(after.map(c => c.item.id))
         const rows = after.map(c => ({ id: c.item.id, collection: c.collection, data: c.item, deleted: c.deleted ?? false, revision: crypto.randomUUID() }))

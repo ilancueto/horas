@@ -40,8 +40,8 @@ export function PeriodEditor({ draft, close, select }: { draft: Period; close:()
   </Dialog>
 }
 
-export function PeriodView({ period, periods, rows, today, choose, edit, add, openDay, report }: {
-  period?:Period; periods:Period[]; rows:DayRow[]; today:string; choose:(id:string)=>void;edit:()=>void;add:()=>void;openDay:(day:string)=>void;report:()=>void
+export function PeriodView({ period, periods, rows, today, choose, edit, add, openDay, report, reconcile }: {
+  period?:Period; periods:Period[]; rows:DayRow[]; today:string; choose:(id:string)=>void;edit:()=>void;add:()=>void;openDay:(day:string)=>void;report:()=>void;reconcile:()=>void
 }) {
   const { ledger, settings } = useHours()
   const [filter,setFilter] = useState('all')
@@ -56,10 +56,12 @@ export function PeriodView({ period, periods, rows, today, choose, edit, add, op
   const locked = period.status!=='Abierto'&&settings.lockClosed
   function save(row:DayRow, patch:Partial<Entry>) {
     if(locked) { notify('El período está bloqueado. Cambiá su estado para editar.');return }
-    const latest=useHours.getState().ledger.entries.find(e=>e.date===row.date)
-    const entry={...(latest??row.entry??blankEntry(row.date,settings)),...patch}
+    const entry={...(row.entry??blankEntry(row.date,settings)),...patch}
     const warnings=entryWarnings(entry,period!,ledger.entries)
-    void apply([{collection:'entries',item:entry}],warnings.join(' ')||'Jornada guardada')
+    void apply(()=>{
+      const latest=useHours.getState().ledger.entries.find(e=>e.date===row.date)
+      return [{collection:'entries',item:{...(latest??entry),...patch}}]
+    },warnings.join(' ')||'Jornada guardada')
   }
   return <>
     <header className="title-line">
@@ -72,7 +74,7 @@ export function PeriodView({ period, periods, rows, today, choose, edit, add, op
         <button onClick={add}><Plus size={16}/> Período</button>
       </div>
     </header>
-    <div className="actions status-line"><span className="status"><i/>{period.status}</span><button onClick={edit}>Editar período</button><button onClick={report}>Resumen para RRHH</button></div>
+    <div className="actions status-line"><span className="status"><i/>{period.status}</span><button onClick={edit}>Editar período</button><button onClick={report}>Resumen para RRHH</button><button onClick={reconcile}>Conciliar recibo</button></div>
     <section className="overview" aria-label="Totales del período">
       <div className="tile total-tile"><span><Clock3 size={17}/> Horas registradas</span><strong><Hours value={totals.total} format={settings.format}/></strong><small>{totals.worked} días trabajados</small></div>
       <div className="tile split-tile">{([['Normales','normal'],['Al 50%','extra'],['Al 100%','double']] as const).map(([label,key])=><div key={key}><span className={key}>{label}</span><strong><Hours value={totals[key]} format={settings.format}/></strong></div>)}</div>
