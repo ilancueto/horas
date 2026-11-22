@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+:root {
+  font-family: "Inter Variable", system-ui, sans-serif;
+  --display: "Fraunces Variable", Georgia, serif;
+  --paper:#f5f2eb; --surface:#fffcf6; --side:#eee9df; --ink:#242823; --muted:#5e645a;
+  --line:#dfd9ce; --accent:#173e39; --on-accent:#fffdf6; --wash:#e5eee8;
+  --week:#f7efd4; --guard:#eee5f5; --comp:#e0eff4; --vac:#e5f0de;
+  --extra:#faead7; --double:#f7e2de; --danger:#9a302d;
+  --shadow:0 8px 28px #3127190b;
+  color:var(--ink); background:var(--paper); color-scheme:light;
+}
+:root[data-theme=dark] {
+  --paper:#211f1a; --surface:#292721; --side:#26231d; --ink:#f4eee2; --muted:#c0b9a9;
+  --line:#484338; --accent:#a6d5c0; --on-accent:#122c26; --wash:#303f36;
+  --week:#494027; --guard:#453650; --comp:#2c414b; --vac:#334430;
+  --extra:#4e3a29; --double:#4d302e; --danger:#ffaaa2;
+  --shadow:0 8px 28px #0002; color-scheme:dark;
+}
+* { box-sizing:border-box }
+body { margin:0; min-width:320px }
+button, input, select, textarea { font:inherit }
+button, select { cursor:pointer }
+button:disabled { opacity:.55; cursor:default }
+:focus-visible { outline:2px solid var(--accent); outline-offset:3px }
+h1,h2,h3,p { margin:0 }
+h1,h2 { font-family:var(--display); font-weight:570; letter-spacing:-.035em }
+h1 { font-size:clamp(2.4rem,5vw,4.1rem); line-height:1.05 }
+h2 { font-size:1.65rem; line-height:1.15 }
+p { line-height:1.55 }
+button,.button { display:inline-flex; align-items:center; justify-content:center; gap:.5rem; min-height:44px; border:1px solid var(--line); border-radius:9px; padding:.55rem .9rem; background:var(--surface); color:var(--ink); font-weight:620; font-size:.87rem; transition:background .18s,transform .18s; text-decoration:none }
+button:hover,.button:hover { background:var(--wash) }
+button:active { transform:translateY(1px) }
+.primary { background:var(--accent); color:var(--on-accent); border-color:var(--accent) }
+.primary:hover { background:var(--accent); filter:brightness(1.12) }
+.icon { width:44px; padding:0; flex:none }
+input:not([type=checkbox]),select,textarea { border:1px solid var(--line); color:var(--ink); background:var(--surface); border-radius:8px; min-height:44px; padding:.48rem .65rem; min-width:0; max-width:100% }
+input[type=checkbox] { accent-color:var(--accent); width:20px; height:20px; flex:none }
+label { display:grid; gap:.35rem; font-size:.85rem; font-weight:600 }
+label.check { display:flex; align-items:center; gap:.55rem; min-height:44px }
+small,.muted { color:var(--muted) }
+.dialog { position:fixed; inset:0; margin:auto; width:min(570px, calc(100% - 32px)); max-height:calc(100dvh - 32px); overflow:auto; background:var(--surface); color:var(--ink); border:1px solid var(--line); border-radius:16px; padding:24px; box-shadow:var(--shadow); animation:enter .2s ease-out }
+.dialog::backdrop { background:#1b241d73 }
+.dialog-head { display:flex; justify-content:space-between; align-items:center; gap:12px; margin-bottom:16px }
+.empty { padding:44px 18px; text-align:center; display:grid; justify-items:center; gap:12px }
+.empty-mark { color:var(--accent); background:var(--wash); border-radius:50%; padding:7px 13px; font-size:25px }
+.welcome { max-width:580px; margin:10vh auto 0; padding:24px }
+.brand { display:flex; align-items:center; gap:10px; font:570 2rem/1 var(--display); letter-spacing:-.06em }
+.brand span { display:grid; place-items:center; color:var(--on-accent); background:var(--accent); width:42px; height:42px; border-radius:12px }
+@keyframes enter { from { opacity:0; transform:translateY(7px) } to { opacity:1; transform:translateY(0) } }
+@media(max-width:600px) { .dialog { inset:auto 0 0; width:100%; max-width:none; max-height:94dvh; border-radius:16px 16px 0 0; padding:18px 18px max(22px,env(safe-area-inset-bottom)) } }
+@media(prefers-reduced-motion:reduce) { *,*::before,*::after { animation:none!important; transition:none!important; scroll-behavior:auto!important } }

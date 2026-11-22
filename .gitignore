@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.env*
+!.env.example
+*.xlsx
+referencia-visual.html
+playwright-report/
+test-results/
+coverage/
