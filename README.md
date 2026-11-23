@@ -1,6 +1,6 @@
 # Horas
 
-Registro personal de jornadas, horas extra y períodos de pago. Funciona en español rioplatense, con fecha y hora de Buenos Aires. Se puede usar solo con el almacenamiento del dispositivo o sincronizar varios dispositivos por Supabase.
+Registro personal de jornadas, horas extra y períodos de pago. Funciona en español rioplatense, con fecha y hora de Buenos Aires. Se puede usar solo con el almacenamiento del dispositivo o sincronizar varios dispositivos con un Worker de Cloudflare y una base D1.
 
 ## Arrancar en la compu
 
@@ -26,7 +26,7 @@ npm run preview -- --port 47683
 2. En Android, abrí el menú de Chrome y elegí **Instalar aplicación** o **Agregar a la pantalla principal**. En iPhone, abrí Safari y elegí **Compartir → Agregar a pantalla de inicio**. En Chrome o Edge de escritorio, usá el botón de instalación de la barra de direcciones o del menú.
 3. Abrila desde el ícono. En los sistemas que admiten accesos directos del manifest, **Cargar hoy** abre la jornada actual.
 
-El service worker guarda la aplicación, las tipografías y los módulos de importación/exportación. Las jornadas quedan en IndexedDB. Cada origen tiene su propio almacenamiento. Si cambiás de dirección, migrá los datos con un JSON o con la misma cuenta de Supabase. Los recordatorios requieren permiso de notificaciones y se comprueban mientras Horas está abierta. Los navegadores no ofrecen programación local fiable con la PWA totalmente cerrada.
+El service worker guarda la aplicación, las tipografías y los módulos de importación/exportación. Las jornadas quedan en IndexedDB. Cada origen tiene su propio almacenamiento. Si cambiás de dirección, migrá los datos con un JSON o con la misma clave de sincronización. Los recordatorios requieren permiso de notificaciones y se comprueban mientras Horas está abierta. Los navegadores no ofrecen programación local fiable con la PWA totalmente cerrada.
 
 ## Importar, exportar y respaldar
 
@@ -48,27 +48,32 @@ Los feriados de 2026 incluyen los días turísticos publicados para ese año. Pa
 - Antes de usar Licencias, actualizá la app en todos tus dispositivos: uno con una versión vieja descarta el tipo de licencia y la lee como vacaciones.
 - Un dispositivo con una versión vieja que guarde las reglas puede borrar el saldo inicial, y uno nuevo que después baje y edite las reglas puede pisarlo en los demás. Si pasa, volvé a cargarlo desde Ajustes.
 
-## Activar Supabase
+## Sincronización (Worker de Cloudflare + D1)
 
-1. Creá un proyecto en Supabase. En **SQL Editor**, ejecutá el archivo de `supabase/migrations/`. Si preferís la CLI, autenticá la CLI, vinculá el proyecto con `supabase link --project-ref TU_REFERENCIA` y aplicá la migración con `supabase db push`. Usá una sola de las dos vías.
-2. Copiá la URL HTTPS del proyecto y la **clave publicable** desde **Connect** o **Settings → API Keys**. Copiá `.env.example` a `.env.local` y cargá `VITE_SUPABASE_URL` y `VITE_SUPABASE_PUBLISHABLE_KEY`. Estas dos variables se incorporan al build. Usá exclusivamente una clave de cliente publicable.
-3. En **Authentication → URL Configuration**, ingresá tu URL de producción como **Site URL** y agregala a **Redirect URLs**. Para pruebas locales, agregá las URLs que uses, por ejemplo `http://127.0.0.1:5173/` y `http://127.0.0.1:47683/`. El proveedor Email tiene que estar activo. Para enviar enlaces a cuentas fuera de tu equipo, revisá la configuración SMTP y los límites de envío de tu proyecto.
-4. Reiniciá Vite o volvé a desplegar. Abrí **Más → Sincronización**, pedí el link de acceso y abrilo en el mismo dispositivo. Repetí el ingreso con el mismo correo en el otro dispositivo. Si ambos ya tienen datos, confirmá la fusión.
-5. Opcionalmente, activá el cifrado con una frase desde **Más → Sincronización**. Necesitás esa frase al abrir una nueva sesión. Los registros ya subidos se cifran al activar la opción. Guardá la frase en un lugar seguro. Sin ella, no se pueden recuperar los registros cifrados de la nube.
+La sincronización es opcional. Sin configurar nada, la app queda en **Solo local**. La guía paso a paso para desplegarla está en [`docs/despliegue.md`](docs/despliegue.md).
 
-Se sincronizan períodos, jornadas, días especiales, licencias y reglas de cálculo (incluido el saldo inicial de compensatorios). El PIN, tema, recordatorios, conciliación y estimación de pago son de cada dispositivo. El PIN controla la pantalla de acceso. El cifrado AES-GCM protege el contenido JSON de los registros en la nube. El identificador de cuenta, la colección, el identificador de registro y las marcas de sincronización siguen siendo visibles para el servidor. Los IDs estables de jornadas, feriados y períodos se derivan de sus fechas.
+1. El Worker vive en `worker/` y guarda los registros en una base D1. Se despliega con `npm run worker:deploy`.
+2. La URL del Worker se carga al compilar con la variable `VITE_SYNC_URL` (para probar en la compu, copiá `.env.example` a `.env.local`). Es una URL pública, no un secreto.
+3. La clave secreta (`SYNC_KEY`) es un secreto del Worker. En cada dispositivo la pegás una vez en **Más → Sincronización** y queda guardada solo en ese dispositivo. Nunca entra en backups, exportaciones ni en la sincronización, y tampoco en el build ni en el repositorio.
+4. Si dos dispositivos ya tienen datos, el segundo que se conecta ofrece **Fusionar datos** para no perder ni duplicar nada.
+5. Opcionalmente, activá el cifrado con una frase desde **Más → Sincronización**. Necesitás esa frase al abrir una nueva sesión. Los registros ya subidos se cifran al activar la opción. Guardá la frase en un lugar seguro: sin ella no se pueden recuperar los registros cifrados de la nube.
+
+No hay tiempo real: la app consulta la nube cada 45 segundos, cuando cambian los datos y cuando vuelve la conexión.
+
+Se sincronizan períodos, jornadas, días especiales, licencias y reglas de cálculo (incluido el saldo inicial de compensatorios). El PIN, tema, recordatorios, conciliación y estimación de pago son de cada dispositivo. El PIN controla la pantalla de acceso. El cifrado de extremo a extremo (AES-GCM) protege el contenido JSON de los registros en la nube. El identificador de registro, la colección y las marcas de sincronización siguen siendo visibles para el servidor. Los IDs estables de jornadas, feriados y períodos se derivan de sus fechas.
 
 Los cambios pendientes conservan su revisión hasta confirmarse. Ante cambios concurrentes del mismo registro gana la última escritura aceptada por el servidor. El servidor conserva los borrados lógicos y reconoce los reintentos de una revisión ya aceptada.
 
-[Enlaces mágicos en Supabase](https://supabase.com/docs/guides/auth/auth-email-passwordless) · [URLs de retorno](https://supabase.com/docs/guides/auth/redirect-urls) · [Realtime](https://supabase.com/docs/guides/realtime/postgres-changes)
-
 ## Publicar por HTTPS
 
-- **Cloudflare Pages**. Conectá el repositorio al crear el proyecto. Comando `npm run build`, directorio de salida `dist` y Node 24. Cargá las variables de Supabase en la configuración del build si querés sincronización.
-- **Vercel**. Importá el repositorio con el framework **Vite**. El archivo `vercel.json` deja configurados el comando, la salida y la política de actualización del service worker. Si usás nube, cargá las dos variables en el entorno que vas a publicar.
-- En ambos casos, si cambia el dominio, actualizá la URL de retorno de Supabase y volvé a instalar la PWA desde el dominio definitivo.
+La app se publica en GitHub Pages, en https://ilancueto.github.io/horas/. El workflow `.github/workflows/pages.yml` corre lint, tipos y tests en cada push a `main`, compila con `VITE_BASE=/horas/` y publica. Las dos variables de build son:
 
-[Cloudflare Pages](https://developers.cloudflare.com/pages/framework-guides/) · [Vite en Vercel](https://vercel.com/docs/frameworks/frontend/vite)
+- `VITE_BASE`: base pública de la app. Por defecto `/`; en Pages es `/horas/`.
+- `VITE_SYNC_URL`: URL del Worker. Va como variable del repositorio (`gh variable set VITE_SYNC_URL --body <url>`). Si falta, la app queda en Solo local.
+
+Para comprobar que el build respete la base, en PowerShell: `$env:VITE_BASE='/horas/'; npm run build; npm run verify:pages -- /horas/`.
+
+Si cambia el dominio, volvé a instalar la PWA desde el dominio nuevo y actualizá `ALLOWED_ORIGIN` en `worker/wrangler.toml`. Cualquier otro hosting estático (Vercel, Cloudflare Pages) también sirve con `npm run build` y la carpeta `dist`.
 
 ## Verificación
 
@@ -80,4 +85,4 @@ npx playwright install chromium
 npm run test:e2e
 ```
 
-Vitest prueba las franjas de horas, fechas, ausencias, importación, persistencia, cola, cifrado y la migración con PostgreSQL embebido. Playwright recorre la compilación de producción en escritorio (1440 px) y celular emulado (390 px), captura ambos temas, verifica accesibilidad, comprueba el manifest y prueba el acceso directo con la red desconectada. Se simulan dos perfiles de navegador con Supabase, incluyendo Realtime, reconexión y fusión, porque el repositorio no trae credenciales de un proyecto real. Las pruebas con la planilla privada se omiten únicamente cuando el archivo no está en la carpeta del proyecto.
+Vitest prueba las franjas de horas, fechas, ausencias, importación, persistencia, cola, cifrado, el cliente de la nube y el Worker con una base D1 simulada. Playwright recorre la compilación de producción en escritorio (1440 px) y celular emulado (390 px), captura ambos temas, verifica accesibilidad, comprueba el manifest y prueba el acceso directo con la red desconectada. Se simulan dos perfiles de navegador contra una API del Worker simulada, con reconexión y fusión, porque el repositorio no trae credenciales reales. Las pruebas con la planilla privada se omiten únicamente cuando el archivo no está en la carpeta del proyecto.
