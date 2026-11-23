@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import { MAX_CONFIG, enableEncryption } from '../src/encryption'
 import { handle, type Env } from '../src/index'
-import { push } from '../src/push'
+import { MAX_RECORD, push } from '../src/push'
 import { setup } from './helpers'
 
 const id = (n: number) => `00000000-0000-4000-8000-${String(n).padStart(12, '0')}`
@@ -312,6 +312,34 @@ describe('POST /v1/encryption', () => {
         expect(response.status).toBe(400)
       }
       expect(await profile(call)).toBeNull()
+    })
+
+    it('mide los límites en bytes UTF-8, no en caracteres', async () => {
+      const { call } = await setup()
+      await seed(call)
+      // 'ñ' ocupa 2 bytes: menos caracteres que el límite, pero más bytes.
+      const bigRecord = 'ñ'.repeat(MAX_RECORD / 2 + 1)
+      expect(JSON.stringify({ iv: 'i', ciphertext: bigRecord }).length).toBeLessThan(MAX_RECORD)
+      const record = await call('POST', '/v1/encryption', {
+        body: {
+          config,
+          changes: [
+            { ...sealedChange(1), data: { iv: 'i', ciphertext: bigRecord } },
+            sealedChange(2),
+          ],
+        },
+      })
+      expect(record.status).toBe(400)
+      expect(await record.json()).toEqual({ error: 'Invalid ciphertext' })
+
+      const bigConfig = 'ñ'.repeat(MAX_CONFIG / 2 + 1)
+      const other = { ...config, check: { ...config.check, ciphertext: bigConfig } }
+      expect(JSON.stringify(other).length).toBeLessThan(MAX_CONFIG)
+      const configResponse = await call('POST', '/v1/encryption', {
+        body: { config: other, changes: [sealedChange(1), sealedChange(2)] },
+      })
+      expect(configResponse.status).toBe(400)
+      await expectUntouched(call)
     })
 
     it('JSON inválido', async () => {

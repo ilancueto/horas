@@ -265,6 +265,21 @@ describe('POST /v1/push', () => {
     await expectEmpty(env)
   })
 
+  it('mide el límite en bytes UTF-8, no en caracteres', async () => {
+    const { env, call } = await setup()
+    // 'ñ' ocupa 2 bytes: menos de MAX_RECORD caracteres, pero más de MAX_RECORD bytes.
+    const text = 'ñ'.repeat(MAX_RECORD / 2 + 1)
+    const payload = JSON.stringify({ s: text })
+    expect(payload.length).toBeLessThan(MAX_RECORD)
+    expect(new TextEncoder().encode(payload).length).toBeGreaterThan(MAX_RECORD)
+    const response = await call('POST', '/v1/push', {
+      body: { changes: [change(1, 1, { data: { s: text } })], encrypted: false },
+    })
+    expect(response.status).toBe(400)
+    expect(await response.json()).toEqual({ error: 'Invalid record' })
+    await expectEmpty(env)
+  })
+
   it('normaliza id y revisión a minúsculas', async () => {
     const { env, call } = await setup()
     const upper = change(10, 10, {
@@ -320,6 +335,8 @@ describe('POST /v1/push', () => {
       ).rejects.toThrow()
       expect(await count(env, 'records')).toBe(0)
       expect(await count(env, 'mutations')).toBe(0)
+      // Solo queda el perfil que escribió la activación concurrente; la batch no agregó nada.
+      expect(await count(env, 'profile')).toBe(1)
       const retry = await call('POST', '/v1/push', {
         body: { changes: [change(1, 1), change(2, 2)], encrypted: false },
       })
@@ -418,6 +435,25 @@ describe('encabezados y errores', () => {
       origin: 'https://otro.example',
     })
     expect(preflight.headers.get('vary')).toContain('Origin')
+  })
+
+  it('sin ALLOWED_ORIGIN no falla: 204/401/200 sin CORS y nunca 500', async () => {
+    const { env } = await setup()
+    const bare: Env = { DB: env.DB, SYNC_KEY }
+    const request = (method: string, path: string, key?: string) => {
+      const headers = new Headers({ origin: ALLOWED_ORIGIN })
+      if (key) headers.set('authorization', `Bearer ${key}`)
+      return handle(new Request(`https://sync.test${path}`, { method, headers }), bare)
+    }
+    const preflight = await request('OPTIONS', '/v1/push')
+    expect(preflight.status).toBe(204)
+    expect(preflight.headers.get('access-control-allow-origin')).toBeNull()
+    const unauthorized = await request('GET', '/v1/profile')
+    expect(unauthorized.status).toBe(401)
+    expect(unauthorized.headers.get('access-control-allow-origin')).toBeNull()
+    const ok = await request('GET', '/v1/profile', SYNC_KEY)
+    expect(ok.status).toBe(200)
+    expect(ok.headers.get('access-control-allow-origin')).toBeNull()
   })
 
   it('en un 500 registra solo el mensaje del error', async () => {

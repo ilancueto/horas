@@ -3,7 +3,7 @@ import { enableEncryption } from './encryption'
 import { empty, json } from './http'
 import { push } from './push'
 
-export type Env = { DB: D1Database; SYNC_KEY: string; ALLOWED_ORIGIN: string }
+export type Env = { DB: D1Database; SYNC_KEY: string; ALLOWED_ORIGIN?: string }
 
 type Route = (request: Request, env: Env, url: URL) => Promise<Response>
 
@@ -71,7 +71,11 @@ const routes: Record<string, Route> = {
 function allowedOrigin(request: Request, env: Env): string | null {
   const origin = request.headers.get('origin')
   if (!origin) return null
-  const allowed = env.ALLOWED_ORIGIN.split(',').map((value) => value.trim())
+  // Sin `ALLOWED_ORIGIN` configurado no se permite ningún origen (en vez de fallar con 500).
+  const allowed = (env.ALLOWED_ORIGIN ?? '')
+    .split(',')
+    .map((value) => value.trim())
+    .filter(Boolean)
   return allowed.includes(origin) ? origin : null
 }
 

@@ -47,6 +47,7 @@ function createWorker() {
   let authorized = 0
   let rejected = 0
   let leaked = 0
+  let pushes = 0
   async function stub(context: BrowserContext) {
     // La clave solo puede viajar en el encabezado Authorization, nunca en una URL.
     context.on('request', (req) => {
@@ -86,6 +87,7 @@ function createWorker() {
         return
       }
       if (req.method() === 'POST' && url.pathname === '/v1/push') {
+        pushes++
         const { changes } = req.postDataJSON() as { changes: RecordPacket[] }
         for (const change of changes) {
           if (revisions.has(change.revision)) continue
@@ -114,7 +116,30 @@ function createWorker() {
     authorized: () => authorized,
     rejected: () => rejected,
     leaked: () => leaked,
+    pushes: () => pushes,
   }
+}
+
+/** Escribe un valor en el meta de IndexedDB (`horas`) sin pasar por la app. */
+async function seedMeta(page: Page, key: string, value: unknown) {
+  await page.evaluate(
+    ([key, value]) =>
+      new Promise<void>((resolve, reject) => {
+        const open = indexedDB.open('horas')
+        open.onerror = () => reject(open.error)
+        open.onsuccess = () => {
+          const idb = open.result
+          const tx = idb.transaction('meta', 'readwrite')
+          tx.objectStore('meta').put({ key, value })
+          tx.oncomplete = () => {
+            idb.close()
+            resolve()
+          }
+          tx.onerror = () => reject(tx.error)
+        }
+      }),
+    [key, value] as const,
+  )
 }
 
 test('sincroniza y fusiona dos perfiles de navegador con el Worker simulado', async ({
@@ -193,6 +218,33 @@ test('sincroniza: una clave incorrecta no se reintenta y se puede quitar', async
     await expect(status(page, 'Solo local')).toBeVisible()
     await expect(page.getByLabel('Clave de sincronización')).toHaveValue('')
     await expect(page.getByRole('alert')).toHaveCount(0)
+    expect(server.leaked()).toBe(0)
+  } finally {
+    await context.close()
+  }
+})
+
+test('sincroniza: datos vinculados a otro servidor no se suben', async ({ browser }) => {
+  const server = createWorker()
+  const context = await browser.newContext()
+  try {
+    await server.stub(context)
+    const page = await context.newPage()
+    await onboard(page)
+    await seedMeta(page, 'syncOwner', 'https://otro.example')
+    await more(page)
+    await expect(status(page, 'Solo local')).toBeVisible()
+    await connect(page, secret)
+    await expect(
+      page
+        .getByText('Estos datos locales están vinculados a otro servidor de sincronización.')
+        .filter({ visible: true }),
+    ).toBeVisible()
+    await expect(status(page, 'Error')).toBeVisible()
+    // Sin reintentos en segundo plano que suban algo.
+    await page.waitForTimeout(1500)
+    expect(server.pushes()).toBe(0)
+    expect(server.remote.size).toBe(0)
     expect(server.leaked()).toBe(0)
   } finally {
     await context.close()

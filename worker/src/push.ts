@@ -4,8 +4,15 @@ import type { Env } from './index'
 import { nextTimestamp } from './time'
 
 export const MAX_BATCH = 100
-/** Largo máximo del JSON de `data` por registro. */
+/** Tamaño máximo, en bytes UTF-8, del JSON de `data` por registro. */
 export const MAX_RECORD = 1_000_000
+
+const encoder = new TextEncoder()
+
+/** Tamaño en bytes UTF-8 (lo que cuenta D1), no en caracteres UTF-16. */
+export function byteLength(value: string): number {
+  return encoder.encode(value).length
+}
 
 const collections = ['periods', 'entries', 'comps', 'leaves', 'holidays', 'rules'] as const
 
@@ -59,7 +66,7 @@ export async function push(
     }
     if (!record.safeParse(change.data).success) return invalid('Invalid record')
     const payload = JSON.stringify(change.data)
-    if (payload.length > MAX_RECORD) return invalid('Invalid record')
+    if (byteLength(payload) > MAX_RECORD) return invalid('Invalid record')
     payloads.push(payload)
   }
 

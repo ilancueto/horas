@@ -1,7 +1,7 @@
 import { z } from 'zod'
 import { empty, json } from './http'
 import type { Env } from './index'
-import { MAX_RECORD } from './push'
+import { MAX_RECORD, byteLength } from './push'
 import { nextTimestamp } from './time'
 
 /** Largo máximo del JSON de `config` guardado en el perfil. */
@@ -52,11 +52,11 @@ export async function enableEncryption(
   if (!parsed.success) return json({ error: 'Invalid configuration' }, 400)
   const { config, changes } = parsed.data
   const encryption = JSON.stringify(config)
-  if (encryption.length > MAX_CONFIG) return json({ error: 'Invalid configuration' }, 400)
+  if (byteLength(encryption) > MAX_CONFIG) return json({ error: 'Invalid configuration' }, 400)
   const payloads: string[] = []
   for (const change of changes) {
     const payload = JSON.stringify(change.data)
-    if (payload.length > MAX_RECORD) return json({ error: 'Invalid ciphertext' }, 400)
+    if (byteLength(payload) > MAX_RECORD) return json({ error: 'Invalid ciphertext' }, 400)
     payloads.push(payload)
   }
 

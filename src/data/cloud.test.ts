@@ -114,6 +114,25 @@ describe('createCloud', () => {
     await expect(createCloud('https://w.test', KEY, fetcher).encryption()).rejects.toThrow()
   })
 
+  it('acepta el formato real del Worker: updated_at con 6 decimales', async () => {
+    // Fila tal como la devuelve el Worker (ISO zulú con microsegundos, `deleted_at` igual).
+    const worker = {
+      ...row(1),
+      updated_at: '2026-11-01T00:00:00.123456Z',
+    }
+    const deleted = {
+      ...row(2),
+      data: null,
+      updated_at: '2026-11-01T00:00:00.123457Z',
+      deleted_at: '2026-11-01T00:00:00.123457Z',
+    }
+    const fetcher = vi.fn().mockImplementation(() => reply({ rows: [worker, deleted] }))
+    const rows = await createCloud('https://w.test', KEY, fetcher).pull()
+    expect(rows).toHaveLength(2)
+    expect(rows[0]!.updated_at).toBe('2026-11-01T00:00:00.123456Z')
+    expect(rows[1]!.deleted_at).toBe('2026-11-01T00:00:00.123457Z')
+  })
+
   it('rechaza una respuesta malformada de pull', async () => {
     const fetcher = vi.fn().mockImplementation(() => reply({ rows: [{ id: 'no-uuid' }] }))
     await expect(createCloud('https://w.test', KEY, fetcher).pull()).rejects.toThrow()

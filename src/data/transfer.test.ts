@@ -5,6 +5,11 @@ import { apply, db, putMeta } from './db'
 import { encodeChanges } from './syncEngine'
 import { backup, readBackup } from './transfer'
 
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
 it('la clave de sincronización no entra en la cola ni en los cambios enviados', async () => {
   await putMeta('syncKey', 'secreta-123')
   await apply([{ collection: 'entries', item: blankEntry('2026-11-23', defaults) }])
@@ -12,11 +17,6 @@ it('la clave de sincronización no entra en la cola ni en los cambios enviados',
   expect(queue.length).toBeGreaterThan(0)
   expect(JSON.stringify(queue)).not.toContain('secreta-123')
   expect(JSON.stringify(await encodeChanges(queue))).not.toContain('secreta-123')
-})
-
-afterEach(() => {
-  vi.restoreAllMocks()
-  vi.unstubAllGlobals()
 })
 
 it('la clave de sincronización no sale en el backup', async () => {
