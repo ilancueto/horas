@@ -90,7 +90,6 @@ export function Onboarding({ openImport, start }: { openImport: () => void; star
         Horas
       </div>
       <div className="stack welcome-content">
-        <p className="eyebrow">Registro de jornadas</p>
         <h1>{setup ? 'Tu horario habitual' : 'Tus horas, en orden.'}</h1>
         {setup ? (
           <form

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { flushSync } from 'react-dom'
 import {
   Activity,
   CalendarDays,
@@ -104,9 +105,14 @@ export function App() {
       setDraft(proposed)
     }
   }
-  function move(view: View) {
-    setView(view)
-    window.scrollTo(0, 0)
+  function move(next: View) {
+    const run = () => {
+      flushSync(() => setView(next))
+      window.scrollTo(0, 0)
+    }
+    if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches)
+      document.startViewTransition(run)
+    else run()
   }
   function closeDraft() {
     setDraft(undefined)
@@ -200,14 +206,13 @@ export function App() {
       <a className="skip-link" href="#contenido">
         Ir al contenido
       </a>
-      <aside className="sidebar">
+      <header className="topbar">
         <div className="brand">
           <span>
             <Clock3 size={22} />
           </span>
           Horas
         </div>
-        <p className="side-label">Registro personal</p>
         <nav aria-label="Navegación principal">
           {nav.map(([value, label, Icon]) => (
             <button
@@ -215,55 +220,43 @@ export function App() {
               aria-current={view === value ? 'page' : undefined}
               onClick={() => move(value)}
             >
-              <Icon size={19} />
+              <Icon size={18} />
               {label}
             </button>
           ))}
         </nav>
-        <div className="side-foot">
-          <span className="status">
+        <div className="actions">
+          <span className="status desk-sync">
             <i /> {sync.status}
           </span>
-          <small>Argentina · es-AR</small>
-        </div>
-      </aside>
-      <main className="workspace" id="contenido">
-        <header className="topbar">
-          <div className="mobile-brand brand">
-            <span>
-              <Clock3 size={21} />
+          {sync.canSend && (
+            <span className="status mobile-sync">
+              <i />
+              {sync.status}
             </span>
-            Horas
-          </div>
-          <span className="desktop-label">Registro de jornadas</span>
-          <div className="actions">
-            {sync.canSend && (
-              <span className="status mobile-sync">
-                <i />
-                {sync.status}
-              </span>
-            )}
-            <button
-              className="icon history-button"
-              aria-label="Deshacer"
-              disabled={!past.length}
-              onClick={() => void undo()}
-            >
-              <Undo2 size={18} />
-            </button>
-            <button
-              className="icon history-button"
-              aria-label="Rehacer"
-              disabled={!future.length}
-              onClick={() => void undo(true)}
-            >
-              <Redo2 size={18} />
-            </button>
-            <button className="primary" aria-label="Cargar hoy" onClick={() => openDay(now)}>
-              <Plus size={18} /> Hoy
-            </button>
-          </div>
-        </header>
+          )}
+          <button
+            className="icon history-button"
+            aria-label="Deshacer"
+            disabled={!past.length}
+            onClick={() => void undo()}
+          >
+            <Undo2 size={18} />
+          </button>
+          <button
+            className="icon history-button"
+            aria-label="Rehacer"
+            disabled={!future.length}
+            onClick={() => void undo(true)}
+          >
+            <Redo2 size={18} />
+          </button>
+          <button className="primary" aria-label="Cargar hoy" onClick={() => openDay(now)}>
+            <Plus size={18} /> Hoy
+          </button>
+        </div>
+      </header>
+      <main className="workspace" id="contenido">
         <div className="content" key={view}>
           {view === 'period' && (
             <PeriodView

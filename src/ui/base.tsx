@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { HardDrive, X } from 'lucide-react'
+import { Clock3, HardDrive, X } from 'lucide-react'
 import { today } from '../domain/dates'
 import { notify } from '../data/db'
 import { backup } from '../data/transfer'
@@ -46,7 +46,7 @@ export function Empty({ title, children }: { title: string; children: ReactNode 
   return (
     <div className="empty">
       <span className="empty-mark" aria-hidden="true">
-        ✳
+        <Clock3 size={24} />
       </span>
       <h2>{title}</h2>
       {children}

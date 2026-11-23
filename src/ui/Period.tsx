@@ -1,13 +1,5 @@
 import { useState } from 'react'
-import {
-  CalendarDays,
-  ChevronLeft,
-  ChevronRight,
-  Clock3,
-  Search,
-  Plus,
-  SlidersHorizontal,
-} from 'lucide-react'
+import { ChevronLeft, ChevronRight, Clock3, Search, Plus, SlidersHorizontal } from 'lucide-react'
 import { clock, daysBetween, decimal, fmtDate, monthEnd, number } from '../domain/dates'
 import { chain, decimalTotals, entryWarnings, summarize, type DayRow } from '../domain/hours'
 import { blankEntry, periodSchema, type Entry, type Period } from '../domain/model'
@@ -202,9 +194,6 @@ export function PeriodView({
     <>
       <header className="title-line">
         <div>
-          <p className="eyebrow">
-            <CalendarDays size={15} /> Período de pago
-          </p>
           <h1 className="capitalize">{periodName(period)}</h1>
           <p className="muted range">
             {fmtDate(period.from)} – {fmtDate(period.to)} <span>·</span> Pago{' '}
@@ -245,7 +234,7 @@ export function PeriodView({
         </div>
       </header>
       <div className="actions status-line">
-        <span className="status">
+        <span className="status" data-status={period.status}>
           <i />
           {period.status}
         </span>
@@ -259,7 +248,12 @@ export function PeriodView({
             <Clock3 size={17} /> Horas registradas
           </span>
           <strong>
-            <Hours value={totals.total} decimalValue={reported.total} format={settings.format} />
+            <Hours
+              roll
+              value={totals.total}
+              decimalValue={reported.total}
+              format={settings.format}
+            />
           </strong>
           <small>
             {totals.worked} {totals.worked === 1 ? 'día trabajado' : 'días trabajados'}
@@ -276,7 +270,12 @@ export function PeriodView({
             <div key={key}>
               <span className={key}>{label}</span>
               <strong>
-                <Hours value={totals[key]} decimalValue={reported[key]} format={settings.format} />
+                <Hours
+                  roll
+                  value={totals[key]}
+                  decimalValue={reported[key]}
+                  format={settings.format}
+                />
               </strong>
             </div>
           ))}

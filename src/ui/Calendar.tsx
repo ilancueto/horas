@@ -19,7 +19,6 @@ export function Calendar({ today, open }: { today: string; open: (date: string) 
     <section className="stack">
       <div className="title-line">
         <div>
-          <p className="eyebrow">Vista mensual</p>
           <h1>Calendario</h1>
         </div>
         <div className="actions">
@@ -93,7 +92,6 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
     <section className="stack">
       <div className="title-line">
         <div>
-          <p className="eyebrow">Resumen por período</p>
           <h1>Resumen anual</h1>
         </div>
         <select aria-label="Año del resumen" value={year} onChange={(e) => setYear(e.target.value)}>
@@ -106,7 +104,7 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
         <div className="tile total-tile">
           <span>Acumulado del año</span>
           <strong>
-            <Hours value={total} format={settings.format} />
+            <Hours roll value={total} format={settings.format} />
           </strong>
         </div>
         <div className="tile">

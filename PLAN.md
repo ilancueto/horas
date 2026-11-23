@@ -8,7 +8,7 @@
 
 ## Diseño
 
-Libreta de trabajo con tipografía editorial, superficies de papel cálido y tinta azul petróleo. El período y sus totales orientan la pantalla, seguidos de la grilla y los filtros. La carga rápida es la acción principal. Entrada breve de las vistas, transición de estados de guardado y hoja móvil con movimiento reducido según preferencias.
+Tarjeta de reloj fichador: papel de planilla verde grisáceo, tinta azul de sello, rojo y ámbar para las horas al 100% y al 50%, y resaltador amarillo para marcar dónde estás (pestaña actual, hoy, campo en edición). Los números van en Big Shoulders Display y el texto en IBM Plex Sans. El total del período es un ticket perforado con sello de entrada; los días no laborables se rayan en diagonal. La carga rápida es la acción principal. Hoja móvil con cabecera oscura y movimiento reducido según preferencias.
 
 ## Checklist
 

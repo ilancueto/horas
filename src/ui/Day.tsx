@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type CSSProperties } from 'react'
 import { Copy, WandSparkles } from 'lucide-react'
 import { clock, clockInput, decimal, fmtDate, number, parseClock } from '../domain/dates'
 import { entryWarnings, type DayRow } from '../domain/hours'
@@ -10,14 +10,27 @@ export function Hours({
   value,
   format,
   decimalValue = decimal(value),
+  roll = false,
 }: {
   value: number
   format: Settings['format']
   decimalValue?: number
+  roll?: boolean
 }) {
+  const text = format === 'decimal' ? number(decimalValue) : clock(value)
   return (
     <span className="hours" title={number(decimalValue) + ' h · ' + clock(value)}>
-      {format === 'decimal' ? number(decimalValue) : clock(value)}
+      {roll
+        ? [...text].map((ch, i) => (
+            <span
+              key={i + ch}
+              className={/\d/.test(ch) ? 'dg' : 'sep'}
+              style={{ '--i': i } as CSSProperties}
+            >
+              {ch}
+            </span>
+          ))
+        : text}
       {format === 'both' && <small> / {number(decimalValue)} h</small>}
     </span>
   )

@@ -17,7 +17,7 @@ export function Absences({ view, today }: { view: AbsenceView; today: string }) 
   const { ledger, settings } = useHours()
   const [form, setForm] = useState<{ item?: Item<AbsenceView> } | null>(null)
   const [year, setYear] = useState(today.slice(0, 4))
-  const { title, one, icon: Icon, tone } = config[view]
+  const { title, one, tone } = config[view]
   const items = ledger[view] as Item<AbsenceView>[]
   const pending = ledger.comps.filter((c) => !c.taken).length
   const balance = leaveBalance(ledger.leaves, year, settings.annualLeave)
@@ -33,9 +33,6 @@ export function Absences({ view, today }: { view: AbsenceView; today: string }) 
     <section className="stack">
       <div className="title-line">
         <div>
-          <p className="eyebrow">
-            <Icon size={15} /> Días especiales
-          </p>
           <h1>{title}</h1>
         </div>
         <button className="primary" onClick={() => setForm({})}>
