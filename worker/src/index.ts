@@ -1,4 +1,6 @@
 import { authorized } from './auth'
+import { empty, json } from './http'
+import { push } from './push'
 
 export type Env = { DB: D1Database; SYNC_KEY: string; ALLOWED_ORIGIN: string }
 
@@ -13,17 +15,6 @@ type RecordRow = {
   revision: string
   updated_at: string
   deleted_at: string | null
-}
-
-export function json(body: unknown, status = 200): Response {
-  return new Response(JSON.stringify(body), {
-    status,
-    headers: { 'content-type': 'application/json; charset=utf-8' },
-  })
-}
-
-export function empty(status = 204): Response {
-  return new Response(null, { status })
 }
 
 function pageSize(value: string | null): number {
@@ -55,10 +46,21 @@ async function readProfile(_request: Request, env: Env): Promise<Response> {
   return json({ encryption })
 }
 
+async function writeChanges(request: Request, env: Env): Promise<Response> {
+  let body: unknown
+  try {
+    body = await request.json()
+  } catch {
+    return json({ error: 'Invalid JSON' }, 400)
+  }
+  return push(env, body, () => new Date())
+}
+
 /** Rutas autenticadas, por `MÉTODO /ruta`. Las tareas siguientes agregan entradas aquí. */
 const routes: Record<string, Route> = {
   'GET /v1/records': readRecords,
   'GET /v1/profile': readProfile,
+  'POST /v1/push': writeChanges,
 }
 
 function allowedOrigin(request: Request, env: Env): string | null {
@@ -68,14 +70,16 @@ function allowedOrigin(request: Request, env: Env): string | null {
   return allowed.includes(origin) ? origin : null
 }
 
+/** Agrega CORS solo al origen permitido; `Vary: Origin` va siempre para no envenenar cachés. */
 function withCors(response: Response, origin: string | null): Response {
-  if (!origin) return response
   const headers = new Headers(response.headers)
-  headers.set('access-control-allow-origin', origin)
-  headers.set('access-control-allow-methods', 'GET, POST, OPTIONS')
-  headers.set('access-control-allow-headers', 'authorization, content-type')
-  headers.set('access-control-max-age', '86400')
   headers.append('vary', 'Origin')
+  if (origin) {
+    headers.set('access-control-allow-origin', origin)
+    headers.set('access-control-allow-methods', 'GET, POST, OPTIONS')
+    headers.set('access-control-allow-headers', 'authorization, content-type')
+    headers.set('access-control-max-age', '86400')
+  }
   return new Response(response.body, { status: response.status, headers })
 }
 
@@ -90,7 +94,9 @@ export async function handle(request: Request, env: Env): Promise<Response> {
   if (!route) return withCors(json({ error: 'Not found' }, 404), origin)
   try {
     return withCors(await route(request, env, url), origin)
-  } catch {
+  } catch (error) {
+    // Solo el mensaje: nunca datos del pedido, encabezados ni la clave.
+    console.error(error instanceof Error ? error.message : 'Unknown error')
     return withCors(json({ error: 'Internal error' }, 500), origin)
   }
 }
