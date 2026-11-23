@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { addDays, decimal, monthEnd } from './dates'
 import { calculate, chain, dayRows, leaveBalance, overlapsLeave, summarize } from './hours'
-import { blankEntry, defaults, emptyLedger, type Holiday, type Period } from './model'
+import { blankEntry, defaults, emptyLedger, leaveSchema, type Holiday, type Period } from './model'
 
 describe('horas por franja', () => {
   const fri = '2026-10-16',
@@ -60,7 +60,13 @@ it('marca ausencias, calcula saldo y agrupa guardias consecutivas', () => {
   const from = '2026-10-15',
     to = '2026-10-20'
   const leaves = [
-    { id: crypto.randomUUID(), from: addDays(from, 2), to: addDays(from, 3), notes: '' },
+    {
+      id: crypto.randomUUID(),
+      kind: 'vacaciones' as const,
+      from: addDays(from, 2),
+      to: addDays(from, 3),
+      notes: '',
+    },
   ]
   const entries = [0, 1, 4].map((i) => ({ ...blankEntry(addDays(from, i), defaults), guard: true }))
   const comps = [{ id: crypto.randomUUID(), earned: from, reason: '', taken: to }]
@@ -70,4 +76,64 @@ it('marca ausencias, calcula saldo y agrupa guardias consecutivas', () => {
   expect(summarize(rows).blocks).toBe(2)
   expect(overlapsLeave(leaves, { ...leaves[0], id: crypto.randomUUID() })).toBe(true)
   expect(leaveBalance(leaves, '2026', 14)).toEqual({ used: 2, remaining: 12 })
+})
+it('lee licencias sin tipo como vacaciones', () => {
+  const leave = leaveSchema.parse({
+    id: crypto.randomUUID(),
+    from: '2026-11-02',
+    to: '2026-11-03',
+    notes: '',
+  })
+  expect(leave.kind).toBe('vacaciones')
+})
+it('el saldo de vacaciones ignora otras licencias', () => {
+  const leaves = [
+    {
+      id: crypto.randomUUID(),
+      kind: 'vacaciones' as const,
+      from: '2026-11-02',
+      to: '2026-11-03',
+      notes: '',
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: 'enfermedad' as const,
+      from: '2026-11-09',
+      to: '2026-11-11',
+      notes: '',
+    },
+  ]
+  expect(leaveBalance(leaves, '2026', 14)).toEqual({ used: 2, remaining: 12 })
+})
+it('una licencia marca el día y no lo deja pendiente', () => {
+  const leaves = [
+    {
+      id: crypto.randomUUID(),
+      kind: 'mudanza' as const,
+      from: '2026-11-10',
+      to: '2026-11-10',
+      notes: '',
+    },
+    {
+      id: crypto.randomUUID(),
+      kind: 'vacaciones' as const,
+      from: '2026-11-12',
+      to: '2026-11-12',
+      notes: '',
+    },
+  ]
+  const rows = dayRows(
+    { from: '2026-11-01', to: '2026-11-30' },
+    { ...emptyLedger, leaves },
+    defaults,
+    '2026-11-20',
+  )
+  const mud = rows.find((r) => r.date === '2026-11-10')!
+  expect(mud.leave).toBe('mudanza')
+  expect(mud.vac).toBe(false)
+  expect(mud.tone).toBe('lic')
+  expect(mud.pending).toBe(false)
+  const vac = rows.find((r) => r.date === '2026-11-12')!
+  expect(vac.tone).toBe('vac')
+  expect(vac.vac).toBe(true)
 })

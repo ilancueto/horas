@@ -77,8 +77,22 @@ export const entrySchema = z.object({
   notes: z.string(),
 })
 export const compSchema = z.object({ id, earned: day, reason: z.string(), taken: day.nullable() })
+export const leaveKinds = ['vacaciones', 'enfermedad', 'mudanza', 'otra'] as const
+export type LeaveKind = (typeof leaveKinds)[number]
+export const leaveLabels: Record<LeaveKind, { label: string; short: string }> = {
+  vacaciones: { label: 'Vacaciones', short: 'Vac' },
+  enfermedad: { label: 'Licencia por enfermedad', short: 'Enf' },
+  mudanza: { label: 'Licencia por mudanza', short: 'Mud' },
+  otra: { label: 'Otra licencia', short: 'Lic' },
+}
 export const leaveSchema = z
-  .object({ id, from: day, to: day, notes: z.string() })
+  .object({
+    id,
+    kind: z.enum(leaveKinds).default('vacaciones'),
+    from: day,
+    to: day,
+    notes: z.string(),
+  })
   .refine((p) => p.from <= p.to)
 export const holidaySchema = z.object({
   id,

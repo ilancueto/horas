@@ -101,7 +101,8 @@ export function dayRows(
     const holiday = holidays.get(date)
     const dow = weekday(date)
     const comp = comps.has(date)
-    const vac = ledger.leaves.some((l) => l.from <= date && l.to >= date)
+    const leave = ledger.leaves.find((l) => l.from <= date && l.to >= date)?.kind ?? null
+    const vac = leave === 'vacaciones'
     const hours = calculate(entry, settings, holidays)
     const fullHoliday = isHoliday(holiday, settings)
     return {
@@ -109,19 +110,22 @@ export function dayRows(
       entry,
       comp,
       vac,
+      leave,
       holiday,
       hours,
       tone: vac
         ? 'vac'
-        : comp
-          ? 'comp'
-          : entry?.guard
-            ? 'guard'
-            : holiday || dow === 0 || dow === 6
-              ? 'week'
-              : '',
+        : leave
+          ? 'lic'
+          : comp
+            ? 'comp'
+            : entry?.guard
+              ? 'guard'
+              : holiday || dow === 0 || dow === 6
+                ? 'week'
+                : '',
       pending:
-        date < now && dow > 0 && dow < 6 && !fullHoliday && !comp && !vac && hours.total === 0,
+        date < now && dow > 0 && dow < 6 && !fullHoliday && !comp && !leave && hours.total === 0,
     }
   })
 }
@@ -175,15 +179,17 @@ export function suggestPeriod(periods: Period[], settings: Settings, now: string
 export function leaveBalance(leaves: Ledger['leaves'], year: string, available: number) {
   const start = year + '-01-01'
   const end = year + '-12-31'
-  const used = leaves.reduce(
-    (sum, leave) =>
-      sum +
-      Math.max(
-        0,
-        daysBetween(leave.from > start ? leave.from : start, leave.to < end ? leave.to : end) + 1,
-      ),
-    0,
-  )
+  const used = leaves
+    .filter((leave) => leave.kind === 'vacaciones')
+    .reduce(
+      (sum, leave) =>
+        sum +
+        Math.max(
+          0,
+          daysBetween(leave.from > start ? leave.from : start, leave.to < end ? leave.to : end) + 1,
+        ),
+      0,
+    )
   return { used, remaining: available - used }
 }
 export const overlapsLeave = (leaves: Ledger['leaves'], range: Ledger['leaves'][number]) =>

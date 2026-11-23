@@ -200,7 +200,8 @@ export function parseExcel(
         imported.comps.push({ id, earned: a, reason: text(sheet, 'B' + i), taken })
       } else if (type === 'leaves') {
         const to = date(value(sheet, 'B' + i), date1904)
-        if (to && to >= a) imported.leaves.push({ id, from: a, to, notes: text(sheet, 'D' + i) })
+        if (to && to >= a)
+          imported.leaves.push({ id, kind: 'vacaciones', from: a, to, notes: text(sheet, 'D' + i) })
         else warnings.push(name + ' fila ' + i + ': revisá el fin del rango.')
       } else {
         const name = text(sheet, 'B' + i) || col

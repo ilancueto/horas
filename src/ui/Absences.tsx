@@ -206,7 +206,13 @@ function AbsenceForm({
                 return
               }
             } else if (view === 'leaves') {
-              next = { id, from: value('from'), to: value('to'), notes: value('notes') }
+              next = {
+                id,
+                kind: 'vacaciones',
+                from: value('from'),
+                to: value('to'),
+                notes: value('notes'),
+              }
               if (next.to < next.from || overlapsLeave(ledger.leaves, next)) {
                 setWarning(
                   'Revisá las fechas. El rango no puede superponerse con otras vacaciones.',
