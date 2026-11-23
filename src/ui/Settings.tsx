@@ -1,7 +1,8 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Clock3, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
 import { clock, decimal, number } from '../domain/dates'
-import { decimalTotals, summarize, type DayRow } from '../domain/hours'
+import { compMinutes, decimalTotals, type DayRow } from '../domain/hours'
+import { ars, extraPay } from '../domain/pay'
 import {
   defaults,
   emptyLedger,
@@ -183,13 +184,18 @@ export function Preferences({
   pin,
   pinChanged,
   today,
+  focusComps,
 }: {
   close: () => void
   pin: Pin | null
   pinChanged: (pin: Pin | null) => void
   today: string
+  focusComps?: boolean
 }) {
   const { settings, privateData } = useHours()
+  useEffect(() => {
+    if (focusComps) document.getElementById('saldo-inicial')?.scrollIntoView({ block: 'start' })
+  }, [focusComps])
   const [draft, setDraft] = useState(settings)
   const [rate, setRate] = useState(privateData.rate?.toString() ?? '')
   const [enabled, setEnabled] = useState(privateData.rate !== null)
@@ -270,6 +276,21 @@ export function Preferences({
             e.preventDefault()
             if (e.currentTarget.querySelector('[aria-invalid=true]')) return
             setError('')
+            if (
+              draft.compSince === null &&
+              (draft.compOpeningDays > 0 || draft.compOpeningMinutes > 0)
+            ) {
+              setError('Elegí la fecha del saldo inicial.')
+              return
+            }
+            if (
+              !Number.isInteger(draft.compOpeningDays) ||
+              draft.compOpeningDays < 0 ||
+              draft.compOpeningDays > 999
+            ) {
+              setError('Los francos disponibles tienen que ser un número entero entre 0 y 999.')
+              return
+            }
             if (!settingsSchema.safeParse(draft).success || draft.start >= draft.end) {
               setError(
                 'Revisá los valores. La salida habitual tiene que ser posterior a la entrada.',
@@ -319,6 +340,47 @@ export function Preferences({
                 <option value="normal">Normal</option>
                 <option value="double">Al 100%</option>
               </select>
+            </label>
+          </div>
+          <h4 id="saldo-inicial">Saldo inicial de compensatorios</h4>
+          <small>
+            Si ya tenías francos o horas al 100% acumuladas, cargalos acá. Solo se suman las
+            jornadas posteriores a esa fecha.
+          </small>
+          <div className="form-grid">
+            <label>
+              Fecha del saldo inicial
+              <input
+                type="date"
+                aria-label="Fecha del saldo inicial"
+                value={draft.compSince ?? ''}
+                onChange={(e) => patch({ compSince: e.target.value || null })}
+              />
+            </label>
+            <label>
+              Francos disponibles
+              <input
+                type="number"
+                min={0}
+                max={999}
+                step={1}
+                required
+                aria-label="Francos disponibles"
+                value={draft.compOpeningDays}
+                onChange={(e) => patch({ compOpeningDays: e.target.valueAsNumber || 0 })}
+              />
+            </label>
+            <label>
+              Horas sobrantes al 100%
+              <TimeField
+                value={draft.compOpeningMinutes}
+                label="Horas sobrantes al 100%"
+                save={(minutes) => {
+                  if ((minutes ?? 0) >= compMinutes)
+                    notify('Las horas sobrantes tienen que ser menos de 8:00.')
+                  else patch({ compOpeningMinutes: minutes ?? 0 })
+                }}
+              />
             </label>
           </div>
           <label className="check">
@@ -391,7 +453,7 @@ export function Preferences({
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
             />{' '}
-            Estimar el pago en este dispositivo
+            Valor hora para calcular extras
           </label>
           {enabled && (
             <label>
@@ -472,15 +534,13 @@ export function Reconcile({
   const saved = privateData.receipt[period.id]
   const [extra, setExtra] = useState(saved?.extra?.toString() ?? '')
   const [double, setDouble] = useState(saved?.double?.toString() ?? '')
-  const totals = summarize(rows)
   const reported = decimalTotals(rows, Boolean(period.excel))
   const delta = (reportedHours: number, paid: string) =>
     paid === '' ? null : Math.round((Number(paid) - reportedHours) * 100) / 100
   const diff50 = delta(reported.extra, extra),
     diff100 = delta(reported.double, double)
   const rate = privateData.rate
-  const ars = (value: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
+  const pay = extraPay(reported, rate ?? 0)
   return (
     <Dialog title="Conciliar recibo" close={close}>
       <form
@@ -543,12 +603,10 @@ export function Reconcile({
         )}
         {rate !== null && (
           <div className="tile">
-            <span>Bruto estimado del período</span>
-            <strong>
-              {ars((rate * (totals.normal + totals.extra * 1.5 + totals.double * 2)) / 60)}
-            </strong>
+            <span>Extras estimadas del período</span>
+            <strong>{ars(pay.total)}</strong>
             <small>
-              Hora normal {ars(rate)} · 50% {ars(rate * 1.5)} · 100% {ars(rate * 2)}
+              50% {ars(pay.extra)} · 100% {ars(pay.double)}
             </small>
           </div>
         )}

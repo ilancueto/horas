@@ -1,7 +1,7 @@
 import 'fake-indexeddb/auto'
 import { beforeEach, expect, it } from 'vitest'
-import { blankEntry, defaults } from '../domain/model'
-import { apply, db, readLedger } from './db'
+import { blankEntry, defaults, rulesId, rulesSchema } from '../domain/model'
+import { apply, db, putMeta, readLedger, saveSettings, useHours } from './db'
 import { cycle, retryDelay, stageInitial, type Backend, type CloudRow } from './syncEngine'
 import { createEncryption, seal, unlockEncryption, unseal } from './crypto'
 
@@ -89,4 +89,76 @@ it('permite recuperar un registro cifrado solo con la frase y el contexto correc
   await expect(unseal(unlocked, locked, 'id|revision')).resolves.toEqual({ notes: 'Reservado' })
   await expect(unseal(unlocked, locked, 'otro')).rejects.toThrow()
   await expect(unlockEncryption('Otra frase de ejemplo', config)).rejects.toThrow()
+})
+it('acepta reglas remotas y ajustes locales viejos sin saldo inicial de francos', async () => {
+  const server = new MockBackend()
+  const oldRules = {
+    id: rulesId,
+    start: 480,
+    end: 1020,
+    breakMinutes: 30,
+    saturday: 780,
+    early: 'extra',
+    nonWorking: false,
+    closing: 14,
+    annualLeave: 14,
+    lockClosed: true,
+  }
+  server.rows.set(rulesId, {
+    id: rulesId,
+    collection: 'rules',
+    data: oldRules,
+    revision: crypto.randomUUID(),
+    updated_at: new Date(Date.UTC(2026, 10, 1)).toISOString(),
+    deleted_at: null,
+  })
+  const { compSince, compOpeningDays, compOpeningMinutes, ...oldSettings } = defaults
+  void compSince
+  void compOpeningDays
+  void compOpeningMinutes
+  await putMeta('settings', { ...oldSettings, onboarded: true })
+  await cycle(server)
+  const settings = useHours.getState().settings
+  expect(settings).toMatchObject({
+    start: 480,
+    breakMinutes: 30,
+    onboarded: true,
+    compSince: null,
+    compOpeningDays: 0,
+    compOpeningMinutes: 0,
+  })
+})
+it('reglas remotas de una versión vieja no pisan el saldo inicial local', async () => {
+  const server = new MockBackend()
+  const { compSince, compOpeningDays, compOpeningMinutes, ...base } = defaults
+  void compSince
+  void compOpeningDays
+  void compOpeningMinutes
+  server.rows.set(rulesId, {
+    id: rulesId,
+    collection: 'rules',
+    data: { id: rulesId, ...rulesSchema.parse({ ...base, start: 480 }) },
+    revision: crypto.randomUUID(),
+    updated_at: new Date(Date.UTC(2026, 10, 1)).toISOString(),
+    deleted_at: null,
+  })
+  const local = { ...defaults, compSince: '2026-11-07', compOpeningDays: 2, compOpeningMinutes: 90 }
+  await putMeta('settings', local)
+  await cycle(server)
+  expect(useHours.getState().settings).toMatchObject({
+    start: 480,
+    compSince: '2026-11-07',
+    compOpeningDays: 2,
+    compOpeningMinutes: 90,
+  })
+})
+it('al guardar las reglas se sincroniza el saldo inicial', async () => {
+  useHours.setState({ settings: defaults })
+  await saveSettings({ compSince: '2026-11-07', compOpeningDays: 2, compOpeningMinutes: 90 })
+  expect((await db.queue.get(rulesId))?.data).toMatchObject({
+    id: rulesId,
+    compSince: '2026-11-07',
+    compOpeningDays: 2,
+    compOpeningMinutes: 90,
+  })
 })

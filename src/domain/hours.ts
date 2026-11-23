@@ -1,8 +1,10 @@
 import { addDays, dateRange, decimal, daysBetween, monthOffset, weekday } from './dates'
 import {
+  leaveKinds,
   periodId,
   type Entry,
   type Holiday,
+  type LeaveKind,
   type Ledger,
   type Period,
   type Settings,
@@ -101,7 +103,8 @@ export function dayRows(
     const holiday = holidays.get(date)
     const dow = weekday(date)
     const comp = comps.has(date)
-    const vac = ledger.leaves.some((l) => l.from <= date && l.to >= date)
+    const leave = ledger.leaves.find((l) => l.from <= date && l.to >= date)?.kind ?? null
+    const vac = leave === 'vacaciones'
     const hours = calculate(entry, settings, holidays)
     const fullHoliday = isHoliday(holiday, settings)
     return {
@@ -109,19 +112,22 @@ export function dayRows(
       entry,
       comp,
       vac,
+      leave,
       holiday,
       hours,
       tone: vac
         ? 'vac'
-        : comp
-          ? 'comp'
-          : entry?.guard
-            ? 'guard'
-            : holiday || dow === 0 || dow === 6
-              ? 'week'
-              : '',
+        : leave
+          ? 'lic'
+          : comp
+            ? 'comp'
+            : entry?.guard
+              ? 'guard'
+              : holiday || dow === 0 || dow === 6
+                ? 'week'
+                : '',
       pending:
-        date < now && dow > 0 && dow < 6 && !fullHoliday && !comp && !vac && hours.total === 0,
+        date < now && dow > 0 && dow < 6 && !fullHoliday && !comp && !leave && hours.total === 0,
     }
   })
 }
@@ -172,19 +178,89 @@ export function suggestPeriod(periods: Period[], settings: Settings, now: string
       : monthOffset(from.slice(0, 7), 1) + '-' + close
   return { id: periodId(from), from, to, status: 'Abierto' }
 }
-export function leaveBalance(leaves: Ledger['leaves'], year: string, available: number) {
+const leaveDaysIn = (leave: Ledger['leaves'][number], year: string) => {
   const start = year + '-01-01'
   const end = year + '-12-31'
-  const used = leaves.reduce(
-    (sum, leave) =>
-      sum +
-      Math.max(
-        0,
-        daysBetween(leave.from > start ? leave.from : start, leave.to < end ? leave.to : end) + 1,
-      ),
+  return Math.max(
     0,
+    daysBetween(leave.from > start ? leave.from : start, leave.to < end ? leave.to : end) + 1,
   )
+}
+export function leaveBalance(leaves: Ledger['leaves'], year: string, available: number) {
+  const used = leaves
+    .filter((leave) => leave.kind === 'vacaciones')
+    .reduce((sum, leave) => sum + leaveDaysIn(leave, year), 0)
   return { used, remaining: available - used }
 }
 export const overlapsLeave = (leaves: Ledger['leaves'], range: Ledger['leaves'][number]) =>
   leaves.some((l) => l.id !== range.id && l.from <= range.to && l.to >= range.from)
+
+export const compMinutes = 480
+export type CompBalance = {
+  opening: number
+  accumulated: number
+  earned: number
+  remainder: number
+  missing: number
+  taken: number
+  available: number
+  earnedDates: string[]
+}
+export function compBalance(ledger: Ledger, settings: Settings, now: string): CompBalance {
+  const { compSince, compOpeningDays, compOpeningMinutes } = settings
+  const after = (date: string) => compSince === null || date > compSince
+  const holidays = holidayMap(ledger)
+  const entries = ledger.entries
+    .filter((entry) => after(entry.date) && entry.date <= now)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  let accumulated = compOpeningMinutes
+  const earnedDates: string[] = []
+  for (const entry of entries) {
+    const before = Math.floor(accumulated / compMinutes)
+    accumulated += calculate(entry, settings, holidays).double
+    for (let k = before; k < Math.floor(accumulated / compMinutes); k++)
+      earnedDates.push(entry.date)
+  }
+  const remainder = accumulated % compMinutes
+  const taken = ledger.comps.filter(
+    (comp) => comp.taken !== null && comp.taken <= now && after(comp.taken),
+  ).length
+  return {
+    opening: compOpeningDays,
+    accumulated,
+    earned: earnedDates.length,
+    remainder,
+    missing: compMinutes - remainder,
+    taken,
+    available: compOpeningDays + earnedDates.length - taken,
+    earnedDates,
+  }
+}
+
+export function yearStats(ledger: Ledger, settings: Settings, year: string, now: string) {
+  const start = year + '-01-01'
+  const end = year + '-12-31'
+  const inYear = (date: string | null) => date !== null && date >= start && date <= end
+  const holidays = holidayMap(ledger)
+  const extra = ledger.entries
+    .filter((entry) => inYear(entry.date) && entry.date <= now)
+    .reduce((sum, entry) => {
+      const hours = calculate(entry, settings, holidays)
+      return sum + hours.extra + hours.double
+    }, 0)
+  const elapsed = daysBetween(start, now < end ? now : end) + 1
+  const leaveDays = Object.fromEntries(leaveKinds.map((kind) => [kind, 0])) as Record<
+    LeaveKind,
+    number
+  >
+  for (const leave of ledger.leaves) leaveDays[leave.kind] += leaveDaysIn(leave, year)
+  return {
+    extra,
+    weeklyExtra: Math.round(extra / Math.max(1, elapsed / 7)),
+    leaveDays,
+    compsEarned: compBalance(ledger, settings, now).earnedDates.filter(inYear).length,
+    compsTaken: ledger.comps.filter(
+      (comp) => comp.taken !== null && inYear(comp.taken) && comp.taken <= now,
+    ).length,
+  }
+}

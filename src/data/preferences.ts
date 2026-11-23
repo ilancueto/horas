@@ -60,8 +60,8 @@ export async function checkReminders(
       await registration.showNotification('Horas', {
         body,
         tag: 'horas-' + kind,
-        icon: '/icon.svg',
-        data: { url: '/?hoy=1' },
+        icon: import.meta.env.BASE_URL + 'icon.svg',
+        data: { url: import.meta.env.BASE_URL + '?hoy=1' },
       })
     else new Notification('Horas', { body, tag: 'horas-' + kind })
     kinds.push(kind)

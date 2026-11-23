@@ -37,6 +37,7 @@
   --guard: oklch(0.92 0.05 300);
   --comp: oklch(0.92 0.05 210);
   --vac: oklch(0.92 0.06 150);
+  --lic: oklch(0.92 0.05 345);
   --extra: oklch(0.92 0.07 75);
   --double: oklch(0.9 0.07 25);
   --amber: oklch(0.75 0.16 70);
@@ -81,6 +82,7 @@
   --guard: oklch(0.33 0.07 300);
   --comp: oklch(0.32 0.05 210);
   --vac: oklch(0.33 0.06 150);
+  --lic: oklch(0.33 0.06 345);
   --extra: oklch(0.36 0.06 70);
   --double: oklch(0.34 0.09 25);
   --amber: oklch(0.78 0.14 70);
@@ -641,7 +643,7 @@ small,
   animation: stamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
 }
 .split-tile {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 .split-tile div {
@@ -664,10 +666,10 @@ small,
 .split-tile div > .double {
   border-top-color: var(--red-ink);
 }
-.split-tile div:nth-child(2) strong {
+.split-tile div:nth-child(1) strong {
   color: var(--amber-ink);
 }
-.split-tile div:nth-child(3) strong {
+.split-tile div:nth-child(2) strong {
   color: var(--red-ink);
 }
 .split-tile strong {
@@ -910,6 +912,10 @@ small,
 .day-card.vac {
   background: var(--vac);
 }
+.daily tr.lic,
+.day-card.lic {
+  background: var(--lic);
+}
 .badges {
   display: flex;
   align-items: center;
@@ -935,6 +941,9 @@ small,
 }
 .comp {
   background: var(--comp);
+}
+.lic {
+  background: var(--lic);
 }
 .vac {
   background: var(--vac);
@@ -1153,6 +1162,115 @@ small,
 .year-picker {
   width: 130px;
 }
+
+/* Saldos */
+.balances h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.balances .absence-summary {
+  margin-bottom: 0;
+}
+.balance-big {
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+.balance-big strong {
+  font: 800 clamp(2.8rem, 5vw, 4.2rem) / 0.9 var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.balance-big.warning strong {
+  color: var(--danger);
+}
+.balance-progress {
+  display: grid;
+  gap: 6px;
+}
+.balance-progress progress {
+  appearance: none;
+  width: 100%;
+  max-width: 520px;
+  height: 18px;
+  border: 0;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+  overflow: hidden;
+}
+.balance-progress progress::-webkit-progress-bar {
+  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+}
+.balance-progress progress::-webkit-progress-value {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+}
+.balance-progress progress::-moz-progress-bar {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+}
+.balance-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+/* Calculadora de extras */
+.calculator {
+  max-width: 820px;
+}
+.calc-period {
+  min-width: min(100%, 220px);
+}
+.calc-rate {
+  max-width: 260px;
+}
+.calc-rows {
+  display: grid;
+  gap: 0;
+}
+.calc-row {
+  display: grid;
+  grid-template-columns: 110px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 4px 14px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--line);
+  font-variant-numeric: tabular-nums;
+}
+.calc-label {
+  justify-self: start;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: 650;
+}
+.calc-formula {
+  color: var(--muted);
+}
+.calc-row strong {
+  text-align: right;
+}
+.calc-total {
+  grid-template-columns: 1fr auto;
+  border-bottom: 0;
+  margin-bottom: 6px;
+}
+.calc-total .calc-label {
+  padding-left: 0;
+}
+.calc-total strong {
+  font: 800 clamp(1.8rem, 4vw, 2.6rem) / 1 var(--display);
+  color: var(--accent);
+}
+@media (max-width: 560px) {
+  .calc-row {
+    grid-template-columns: 1fr auto;
+  }
+  .calc-formula {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}
 .comparison {
   overflow: auto;
 }
@@ -1286,7 +1404,7 @@ small,
   .bottom-nav {
     position: fixed;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
     inset: auto 0 0;
     z-index: 3;

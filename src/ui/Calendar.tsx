@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import { addDays, clock, fmtDate, monthEnd, monthOffset, weekday } from '../domain/dates'
-import { chain, dayRows, summarize } from '../domain/hours'
+import { chain, dayRows, summarize, yearStats } from '../domain/hours'
+import { leaveKinds, leaveLabels } from '../domain/model'
 import { useHours } from '../data/db'
 import { DayBadge, Hours } from './Day'
 import { Empty } from './base'
@@ -71,6 +72,7 @@ export function Calendar({ today, open }: { today: string; open: (date: string) 
           <span className="badge guard">Guardia</span>
           <span className="badge comp">Compensatorio</span>
           <span className="badge vac">Vacaciones</span>
+          <span className="badge lic">Licencia</span>
         </div>
       </div>
     </section>
@@ -84,10 +86,15 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
   const data = periods
     .filter((p) => p.to.startsWith(year))
     .map((p) => ({ p, ...summarize(dayRows(p, ledger, settings, today)) }))
-  const max = Math.max(1, ...data.map((d) => d.total))
-  const total = data.reduce((sum, d) => sum + d.total, 0)
-  const extra = data.reduce((sum, d) => sum + d.extra + d.double, 0)
+  const max = Math.max(1, ...data.map((d) => d.extra + d.double))
   const worked = data.reduce((sum, d) => sum + d.worked, 0)
+  const stats = yearStats(ledger, settings, year, today)
+  const days = (n: number) => n + (n === 1 ? ' día' : ' días')
+  const absences: [string, string][] = [
+    ...leaveKinds.map((k): [string, string] => [leaveLabels[k].label, days(stats.leaveDays[k])]),
+    ['Francos ganados', String(stats.compsEarned)],
+    ['Francos tomados', String(stats.compsTaken)],
+  ]
   return (
     <section className="stack">
       <div className="title-line">
@@ -102,17 +109,18 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
       </div>
       <div className="overview">
         <div className="tile total-tile">
-          <span>Acumulado del año</span>
+          <span>Horas extra del año</span>
           <strong>
-            <Hours roll value={total} format={settings.format} />
+            <Hours roll value={stats.extra} format={settings.format} />
           </strong>
+          <small>Al 50% y al 100%</small>
         </div>
         <div className="tile">
-          <span>Horas extra promedio</span>
+          <span>Promedio semanal de extras</span>
           <strong>
-            <Hours value={Math.round(extra / Math.max(1, data.length))} format={settings.format} />
+            <Hours value={stats.weeklyExtra} format={settings.format} />
           </strong>
-          <small>Por período</small>
+          <small>Por semana transcurrida</small>
         </div>
         <div className="tile">
           <span>Días trabajados</span>
@@ -127,9 +135,8 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
         </div>
       </div>
       <div className="panel stack">
-        <h2>Horas por período</h2>
+        <h2>Horas extra por período</h2>
         <div className="actions legend">
-          <span className="badge normal">Normales</span>
           <span className="badge extra">50%</span>
           <span className="badge double">100%</span>
         </div>
@@ -140,20 +147,13 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
               <div
                 className="chart"
                 role="img"
-                aria-label={
-                  'Normales ' +
-                  clock(d.normal) +
-                  ', al 50% ' +
-                  clock(d.extra) +
-                  ', al 100% ' +
-                  clock(d.double)
-                }
+                aria-label={'Al 50% ' + clock(d.extra) + ', al 100% ' + clock(d.double)}
               >
-                {(['normal', 'extra', 'double'] as const).map((k) => (
+                {(['extra', 'double'] as const).map((k) => (
                   <span key={k} className={k} style={{ width: (100 * d[k]) / max + '%' }} />
                 ))}
               </div>
-              <Hours value={d.total} format={settings.format} />
+              <Hours value={d.extra + d.double} format={settings.format} />
             </div>
           ))
         ) : (
@@ -162,6 +162,17 @@ export function Annual({ today, choose }: { today: string; choose: (id: string) 
           </Empty>
         )}
       </div>
+      <section className="panel stack" aria-labelledby="ausencias-anio">
+        <h2 id="ausencias-anio">Ausencias del año</h2>
+        <ul className="record-list">
+          {absences.map(([label, value]) => (
+            <li key={label}>
+              <span>{label}</span>
+              <strong>{value}</strong>
+            </li>
+          ))}
+        </ul>
+      </section>
     </section>
   )
 }

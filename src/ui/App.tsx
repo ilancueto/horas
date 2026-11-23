@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   Activity,
+  Calculator as CalculatorIcon,
   CalendarDays,
   Clock3,
   HelpCircle,
   ListChecks,
   Menu,
   Plus,
+  Scale,
   Settings as SettingsIcon,
   Undo2,
   Redo2,
@@ -21,14 +23,17 @@ import { PeriodEditor, PeriodView } from './Period'
 import { Annual, Calendar } from './Calendar'
 import { DataTools, ImportExcel, Report } from './Transfer'
 import { Absences, type AbsenceView } from './Absences'
+import { Balances } from './Balances'
+import { Calculator } from './Calculator'
 import { Help, Lock, Onboarding, Preferences, Reconcile } from './Settings'
 import { MergeSync, SyncPanel, useSync } from './Sync'
 import { checkReminders, pinSchema, type Pin } from '../data/preferences'
 
-type View = 'period' | 'calendar' | 'annual' | 'more' | AbsenceView
+type View = 'period' | 'calendar' | 'balances' | 'calculator' | 'annual' | 'more' | AbsenceView
 const nav = [
   ['period', 'Período', ListChecks],
   ['calendar', 'Calendario', CalendarDays],
+  ['balances', 'Saldos', Scale],
   ['annual', 'Resumen anual', Activity],
   ['more', 'Más', Menu],
 ] as const
@@ -40,6 +45,7 @@ export function App() {
   const [day, setDay] = useState('')
   const [requestedDay, setRequestedDay] = useState('')
   const [draft, setDraft] = useState<Period>()
+  const [calcPeriod, setCalcPeriod] = useState('')
   const [modal, setModal] = useState('')
   const [pin, setPin] = useState<Pin | null>(null)
   const [pinReady, setPinReady] = useState(false)
@@ -113,6 +119,10 @@ export function App() {
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches)
       document.startViewTransition(run)
     else run()
+  }
+  function calculate() {
+    setCalcPeriod(period?.id ?? '')
+    move('calculator')
   }
   function closeDraft() {
     setDraft(undefined)
@@ -270,12 +280,30 @@ export function App() {
               openDay={openDay}
               report={() => setModal('report')}
               reconcile={() => setModal('receipt')}
+              calculate={calculate}
+            />
+          )}
+          {view === 'calculator' && (
+            <Calculator
+              periodId={calcPeriod || undefined}
+              today={now}
+              openSettings={() => setModal('settings')}
             />
           )}
           {view === 'calendar' && <Calendar today={now} open={openDay} />}
           {view === 'annual' && <Annual today={now} choose={choose} />}
-          {(view === 'comps' || view === 'leaves' || view === 'holidays') && (
-            <Absences key={view} view={view} today={now} />
+          {(view === 'comps' ||
+            view === 'leaves' ||
+            view === 'licenses' ||
+            view === 'holidays') && (
+            <Absences key={view} view={view} today={now} openBalances={() => move('balances')} />
+          )}
+          {view === 'balances' && (
+            <Balances
+              today={now}
+              openSettings={() => setModal('settings-comps')}
+              openComps={() => move('comps')}
+            />
           )}
           {view === 'more' && (
             <section className="stack">
@@ -283,7 +311,11 @@ export function App() {
               <div className="panel actions">
                 <button onClick={() => move('comps')}>Compensatorio</button>
                 <button onClick={() => move('leaves')}>Vacaciones</button>
+                <button onClick={() => move('licenses')}>Licencias</button>
                 <button onClick={() => move('holidays')}>Feriados</button>
+                <button onClick={calculate}>
+                  <CalculatorIcon size={18} /> Calculadora de extras
+                </button>
                 <button onClick={() => setModal('settings')}>
                   <SettingsIcon size={18} /> Ajustes
                 </button>
@@ -327,10 +359,11 @@ export function App() {
           previous={ledger.entries.find((e) => e.date === addDays(day, -1))}
         />
       )}
-      {modal === 'settings' && (
+      {(modal === 'settings' || modal === 'settings-comps') && (
         <Preferences
           close={() => setModal('')}
           today={now}
+          focusComps={modal === 'settings-comps'}
           pin={pin}
           pinChanged={(value) => {
             setPin(value)

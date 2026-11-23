@@ -1,5 +1,6 @@
 node_modules/
 dist/
+dist-pages/
 .env*
 !.env.example
 *.xlsx
@@ -7,3 +8,6 @@ referencia-visual.html
 playwright-report/
 test-results/
 coverage/
+.superpowers/
+.wrangler/
+.dev.vars*
