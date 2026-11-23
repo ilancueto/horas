@@ -274,15 +274,17 @@ export function App() {
           )}
           {view === 'calendar' && <Calendar today={now} open={openDay} />}
           {view === 'annual' && <Annual today={now} choose={choose} />}
-          {(view === 'comps' || view === 'leaves' || view === 'holidays') && (
-            <Absences key={view} view={view} today={now} />
-          )}
+          {(view === 'comps' ||
+            view === 'leaves' ||
+            view === 'licenses' ||
+            view === 'holidays') && <Absences key={view} view={view} today={now} />}
           {view === 'more' && (
             <section className="stack">
               <h1>Más</h1>
               <div className="panel actions">
                 <button onClick={() => move('comps')}>Compensatorio</button>
                 <button onClick={() => move('leaves')}>Vacaciones</button>
+                <button onClick={() => move('licenses')}>Licencias</button>
                 <button onClick={() => move('holidays')}>Feriados</button>
                 <button onClick={() => setModal('settings')}>
                   <SettingsIcon size={18} /> Ajustes

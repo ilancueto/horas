@@ -135,6 +135,35 @@ test('carga jornadas, guardia y ausencias, descarga XLSX/PDF/JSON y restaura', a
   await nav(page, 'Período').click()
   await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('8:35')
 })
+test('carga licencias por tipo', async ({ page }) => {
+  await start(page)
+  await nav(page, 'Más').click()
+  await page.getByRole('button', { name: 'Licencias', exact: true }).click()
+  await page.getByRole('button', { name: 'Agregar licencia' }).click()
+  await page.getByLabel('Tipo', { exact: true }).selectOption({ label: 'Otra licencia' })
+  await page.getByLabel('Desde', { exact: true }).fill('2026-11-26')
+  await page.getByLabel('Hasta', { exact: true }).fill('2026-11-26')
+  await page.getByLabel('Notas', { exact: true }).fill('')
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  await expect(page.getByText('Contá el motivo en las notas.')).toBeVisible()
+  await page.getByLabel('Notas', { exact: true }).fill('Trámite')
+  await page.getByRole('button', { name: 'Guardar', exact: true }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(page.getByText('Otra licencia', { exact: true })).toBeVisible()
+  for (const theme of ['light', 'dark'] as const) {
+    await nav(page, 'Más').click()
+    await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
+    await page.getByLabel('Tema').selectOption(theme)
+    await page.getByRole('button', { name: 'Guardar ajustes' }).click()
+    await expect(page.locator('html')).toHaveAttribute('data-theme', theme)
+    await nav(page, 'Período').click()
+    await expect(page.getByText('Lic', { exact: true }).filter({ visible: true })).toHaveCount(1)
+    const result = await new AxeBuilder({ page })
+      .withTags(['wcag2a', 'wcag2aa', 'wcag21aa'])
+      .analyze()
+    expect(result.violations.map((v) => [v.id, v.nodes.map((n) => n.target)])).toEqual([])
+  }
+})
 test('instalabilidad, acceso directo y recarga de producción sin conexión', async ({
   page,
   context,
@@ -196,6 +225,7 @@ test('revisa pantallas a su ancho real en ambos temas y detecta problemas de acc
     for (const [label, name] of [
       ['Compensatorio', 'comp'],
       ['Vacaciones', 'vac'],
+      ['Licencias', 'licencias'],
       ['Feriados', 'feriados'],
     ]) {
       await nav(page, 'Más').click()

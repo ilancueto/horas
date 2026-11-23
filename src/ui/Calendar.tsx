@@ -71,6 +71,7 @@ export function Calendar({ today, open }: { today: string; open: (date: string) 
           <span className="badge guard">Guardia</span>
           <span className="badge comp">Compensatorio</span>
           <span className="badge vac">Vacaciones</span>
+          <span className="badge lic">Licencia</span>
         </div>
       </div>
     </section>

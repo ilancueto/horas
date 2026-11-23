@@ -2,7 +2,7 @@ import { useState, type CSSProperties } from 'react'
 import { Copy, WandSparkles } from 'lucide-react'
 import { clock, clockInput, decimal, fmtDate, number, parseClock } from '../domain/dates'
 import { entryWarnings, type DayRow } from '../domain/hours'
-import { blankEntry, type Entry, type Period, type Settings } from '../domain/model'
+import { blankEntry, leaveLabels, type Entry, type Period, type Settings } from '../domain/model'
 import { apply, notify, useHours } from '../data/db'
 import { DeleteActions, Dialog } from './base'
 
@@ -249,6 +249,11 @@ export function DayBadge({ row }: { row: DayRow }) {
       {row.vac && (
         <span className="badge vac" title="Vacaciones">
           Vac
+        </span>
+      )}
+      {row.leave && row.leave !== 'vacaciones' && (
+        <span className="badge lic" title={leaveLabels[row.leave].label}>
+          {leaveLabels[row.leave].short}
         </span>
       )}
       {row.comp && (

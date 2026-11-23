@@ -37,6 +37,7 @@
   --guard: oklch(0.92 0.05 300);
   --comp: oklch(0.92 0.05 210);
   --vac: oklch(0.92 0.06 150);
+  --lic: oklch(0.92 0.05 345);
   --extra: oklch(0.92 0.07 75);
   --double: oklch(0.9 0.07 25);
   --amber: oklch(0.75 0.16 70);
@@ -81,6 +82,7 @@
   --guard: oklch(0.33 0.07 300);
   --comp: oklch(0.32 0.05 210);
   --vac: oklch(0.33 0.06 150);
+  --lic: oklch(0.33 0.06 345);
   --extra: oklch(0.36 0.06 70);
   --double: oklch(0.34 0.09 25);
   --amber: oklch(0.78 0.14 70);
@@ -910,6 +912,10 @@ small,
 .day-card.vac {
   background: var(--vac);
 }
+.daily tr.lic,
+.day-card.lic {
+  background: var(--lic);
+}
 .badges {
   display: flex;
   align-items: center;
@@ -935,6 +941,9 @@ small,
 }
 .comp {
   background: var(--comp);
+}
+.lic {
+  background: var(--lic);
 }
 .vac {
   background: var(--vac);

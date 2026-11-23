@@ -1,7 +1,12 @@
 import { clock, fmtDate, monthEnd, number } from '../domain/dates'
 import { decimalTotals, summarize, type DayRow } from '../domain/hours'
-import type { Period } from '../domain/model'
+import type { LeaveKind, Period } from '../domain/model'
 
+const reportLeaveLabels: Record<Exclude<LeaveKind, 'vacaciones'>, string> = {
+  enfermedad: 'Lic. enfermedad',
+  mudanza: 'Lic. mudanza',
+  otra: 'Otra licencia',
+}
 const show = (minutes: number, display: number) => clock(minutes) + ' (' + number(display) + ' h)'
 export function reportText(period: Period, rows: DayRow[], detail: 'all' | 'extra') {
   const t = summarize(rows)
@@ -35,7 +40,7 @@ export function reportText(period: Period, rows: DayRow[], detail: 'all' | 'extr
       .filter((r) =>
         detail === 'extra'
           ? r.hours.extra || r.hours.double
-          : r.hours.total || r.entry?.guard || r.comp || r.vac,
+          : r.hours.total || r.entry?.guard || r.comp || r.leave,
       )
       .map(
         (r) =>
@@ -50,6 +55,7 @@ export function reportText(period: Period, rows: DayRow[], detail: 'all' | 'extr
           clock(r.hours.double) +
           (r.comp ? '  |  Comp' : '') +
           (r.vac ? '  |  Vac' : '') +
+          (r.leave && r.leave !== 'vacaciones' ? '  |  ' + reportLeaveLabels[r.leave] : '') +
           (r.entry?.guard ? '  |  Guardia' : ''),
       ),
   ].join('\n')
