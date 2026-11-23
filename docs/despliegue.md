@@ -126,8 +126,20 @@ Esto no se probó contra Cloudflare real. Probalo después de desplegar. Los lí
 ## 5. Primer uso
 
 1. En el celular, abrí https://ilancueto.github.io/horas/ con conexión y esperá a que termine de cargar. Instalala (Android: **Instalar aplicación**; iPhone: **Compartir → Agregar a pantalla de inicio**). En la compu, usá el botón de instalar de Chrome o Edge.
-2. En **Más → Sincronización**, pegá la clave y tocá **Guardar y conectar**. Tiene que pasar a **Sincronizado**.
-3. En el segundo dispositivo, repetí la instalación y cargá la misma clave. Si los dos ya tienen datos, aparece **Fusionar datos**: confirmá y esperá a **Sincronizado**.
+2. En el primer dispositivo, empezá como siempre (**Importar mi Excel** o **Empezar de cero**). Después, en **Más → Sincronización**, pegá la clave y tocá **Guardar y conectar**. Tiene que pasar a **Sincronizado**.
+3. Para sumar otro dispositivo, tenés dos caminos y ninguno crea un período de más:
+   - **Con el enlace:** en el dispositivo ya conectado, andá a **Más → Sincronización → Vincular otro dispositivo**. Abrí el enlace en el dispositivo nuevo (mandátelo a vos mismo o escaneá el código QR con la cámara). La app lo borra de la barra apenas lo lee, se conecta sola, baja tus datos y entra. El enlace contiene tu clave: usalo solo en tus dispositivos y borrá el mensaje y la entrada del historial después. Si la app tiene PIN, el enlace se aplica después de desbloquearla.
+   - **Con la clave:** en la bienvenida del dispositivo nuevo tocá **Ya tengo mis datos en la nube**, pegá la clave y tocá **Conectar**. Si la clave no es válida o la nube está vacía, la app te avisa y no deja nada configurado.
+   - **Si activaste el cifrado:** en los dos caminos, la bienvenida te pide la frase de paso ("Tu nube tiene cifrado. Escribí tu frase de paso para bajar tus datos."). Escribila y tocá **Desbloquear**: recién ahí baja tus datos y entra. Si la frase no coincide, probá de nuevo; con **Cancelar** el dispositivo queda como estaba, sin la clave.
+
+   La app borra el enlace de la barra apenas lo lee, pero puede quedar en el historial del navegador y en el historial del portapapeles si lo copiaste:
+
+   - **Historial del navegador:** en Chrome o Edge, abrí **Historial** (Ctrl+H en la compu; menú ⋮ → **Historial** en el celular), buscá la dirección de Horas y eliminá esa entrada.
+   - **Portapapeles:** en Windows, Win+V muestra el historial: borrá la entrada desde su menú `…` o con **Borrar todo**. En el celular, revisá el portapapeles del teclado.
+   - **Si compartiste el enlace o la clave por error:** cambiá la clave con `npx wrangler secret put SYNC_KEY --config worker/wrangler.toml` y volvé a conectar cada dispositivo con la clave nueva (**Quitar clave** y **Guardar y conectar**, o un enlace nuevo desde un dispositivo ya conectado).
+
+   Si el dispositivo nuevo ya tenía datos propios y lo conectás desde **Más → Sincronización**, aparece **Fusionar datos**: confirmá y esperá a **Sincronizado**.
+
 4. Opcional: activá el cifrado de extremo a extremo con una frase y guardala en un lugar seguro. Si al activarlo el Worker responde con un error del servidor (`5xx`), el cliente **no** reintenta la activación solo: esperá unos segundos y volvé a tocar **Activar cifrado** con la misma frase. Hasta que funcione, los datos siguen sin cifrar en la nube.
 
 Cada origen tiene su propio almacenamiento: si ya usabas la app en otra dirección (por ejemplo `127.0.0.1`), bajá un backup JSON de ahí y restauralo en la instalación nueva, o dejá que **Fusionar datos** suba los datos.

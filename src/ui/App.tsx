@@ -204,6 +204,7 @@ export function App() {
         <Onboarding
           openImport={() => setModal('import')}
           start={() => setDraft(suggestPeriod(periods, useHours.getState().settings, now))}
+          sync={sync}
         />
         {modal === 'import' && (
           <ImportExcel close={() => setModal('')} onDone={() => move('period')} />

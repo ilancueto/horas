@@ -372,3 +372,14 @@ test('revisa pantallas a su ancho real en ambos temas y detecta problemas de acc
     }
   }
 })
+
+test('solo local: la bienvenida no ofrece la nube y un enlace con clave se descarta', async ({
+  page,
+}) => {
+  await setClock(page)
+  await page.goto('/#clave=algo')
+  await expect(page.getByRole('button', { name: 'Empezar de cero' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Ya tengo mis datos en la nube' })).toHaveCount(0)
+  expect(await page.evaluate(() => location.hash)).toBe('')
+  await expect(page.getByRole('status')).toHaveCount(0)
+})

@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Clock3, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
+import { Clock3, Cloud, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
 import { clock, decimal, number } from '../domain/dates'
 import { compMinutes, decimalTotals, type DayRow } from '../domain/hours'
 import { ars, extraPay } from '../domain/pay'
@@ -11,11 +11,21 @@ import {
   type Period,
   type Settings,
 } from '../domain/model'
-import { apply, diffLedger, notify, putMeta, savePrivate, saveSettings, useHours } from '../data/db'
+import {
+  apply,
+  diffLedger,
+  markOnboarded,
+  notify,
+  putMeta,
+  savePrivate,
+  saveSettings,
+  useHours,
+} from '../data/db'
 import { nationalHolidays } from '../domain/holidays'
 import { backup } from '../data/transfer'
 import { checkPin, makePin, requestReminders, type Pin } from '../data/preferences'
 import { Dialog } from './base'
+import { ConnectCloud, connectionText, type SyncState } from './Sync'
 import { TimeField } from './Day'
 
 function ScheduleFields({
@@ -79,9 +89,43 @@ function ScheduleFields({
     </div>
   )
 }
-export function Onboarding({ openImport, start }: { openImport: () => void; start: () => void }) {
+export function Onboarding({
+  openImport,
+  start,
+  sync,
+}: {
+  openImport: () => void
+  start: () => void
+  sync: SyncState
+}) {
   const [setup, setSetup] = useState(false)
+  const [joining, setJoining] = useState(false)
+  // Un enlace a una nube cifrada deja la conexión esperando la frase de paso.
+  const connectOpen = joining || sync.joinLocked
+  // Mientras conecta o quedó una clave guardada, no se empieza por otro camino.
+  const held = sync.connecting || sync.hasKey
+  const [retry, setRetry] = useState({ busy: false, error: '' })
   const [draft, setDraft] = useState(defaults)
+  async function resume() {
+    setRetry({ busy: true, error: '' })
+    let outcome = await sync.resumeJoin()
+    if (outcome === 'ok') {
+      try {
+        await markOnboarded()
+        sync.finishJoin()
+        return
+      } catch {
+        outcome = 'error'
+      }
+    }
+    // Nube cifrada: se abre el paso de la frase de paso.
+    setRetry({ busy: false, error: outcome === 'locked' ? '' : connectionText[outcome] })
+  }
+  async function discard() {
+    setRetry({ busy: true, error: '' })
+    await sync.cancelJoin()
+    setRetry({ busy: false, error: '' })
+  }
   return (
     <main className="welcome welcome-panel">
       <div className="brand">
@@ -103,7 +147,9 @@ export function Onboarding({ openImport, start }: { openImport: () => void; star
           >
             <ScheduleFields draft={draft} patch={(p) => setDraft((d) => ({ ...d, ...p }))} />
             <div className="actions">
-              <button className="primary">Continuar</button>
+              <button className="primary" disabled={held}>
+                Continuar
+              </button>
               <button type="button" onClick={() => setSetup(false)}>
                 Atrás
               </button>
@@ -115,16 +161,45 @@ export function Onboarding({ openImport, start }: { openImport: () => void; star
               Registrá jornadas, horas extra y cierres de pago desde el celular o la compu.
             </p>
             <div className="actions">
-              <button className="primary" onClick={openImport}>
+              <button className="primary" disabled={held} onClick={openImport}>
                 <FileSpreadsheet size={18} /> Importar mi Excel
               </button>
-              <button onClick={() => setSetup(true)}>
+              <button disabled={held} onClick={() => setSetup(true)}>
                 <Plus size={18} /> Empezar de cero
               </button>
             </div>
+            {sync.canSend && (
+              <div className="actions welcome-connect">
+                <button disabled={held} onClick={() => setJoining(true)}>
+                  <Cloud size={18} /> Ya tengo mis datos en la nube
+                </button>
+              </div>
+            )}
           </>
         )}
+        {!connectOpen &&
+          (sync.connecting || retry.busy ? (
+            <p role="status">Conectando con tu nube…</p>
+          ) : (
+            sync.hasKey && (
+              <div className="stack">
+                <p>Quedó una clave guardada que no terminó de conectar.</p>
+                <div className="actions">
+                  <button className="primary" onClick={() => void resume()}>
+                    Reintentar
+                  </button>
+                  <button onClick={() => void discard()}>Cancelar</button>
+                </div>
+              </div>
+            )
+          ))}
+        {!connectOpen && retry.error && (
+          <p className="warning" role="alert">
+            {retry.error}
+          </p>
+        )}
       </div>
+      {connectOpen && <ConnectCloud sync={sync} close={() => setJoining(false)} />}
     </main>
   )
 }
