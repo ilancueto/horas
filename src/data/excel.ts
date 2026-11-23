@@ -14,10 +14,13 @@ import {
   blankEntry,
   day,
   emptyLedger,
+  leaveKinds,
+  leaveLabels,
   ledgerSchema,
   periodId,
   type Entry,
   type Item,
+  type LeaveKind,
   type Ledger,
   type Period,
   type Settings,
@@ -53,6 +56,10 @@ function time(value: unknown) {
   if (typeof value === 'number' && value >= 0 && value < 1) return Math.round(value * 1440) % 1440
   return typeof value === 'string' ? parseClock(value) : null
 }
+function leaveKindFromLabel(label: string): LeaveKind {
+  const wanted = label.toLowerCase()
+  return leaveKinds.find((k) => leaveLabels[k].label.toLowerCase() === wanted) ?? 'vacaciones'
+}
 type Comparison = { sheet: string; id: string; excel: (number | undefined)[]; calculated: number[] }
 export type ExcelPreview = {
   ledger: Ledger
@@ -82,7 +89,7 @@ export function mergeLedger(base: Ledger, incoming: Ledger): Ledger {
     ]),
     entries: merge(base.entries, incoming.entries, (e) => e.date),
     comps: merge(base.comps, incoming.comps, (c) => [c.earned, c.reason, c.taken].join('|')),
-    leaves: merge(base.leaves, incoming.leaves, (l) => l.from + '|' + l.to),
+    leaves: merge(base.leaves, incoming.leaves, (l) => l.from + '|' + l.to + '|' + l.kind),
     holidays: merge(base.holidays, incoming.holidays, (h) => h.date),
   }
 }
@@ -201,7 +208,13 @@ export function parseExcel(
       } else if (type === 'leaves') {
         const to = date(value(sheet, 'B' + i), date1904)
         if (to && to >= a)
-          imported.leaves.push({ id, kind: 'vacaciones', from: a, to, notes: text(sheet, 'D' + i) })
+          imported.leaves.push({
+            id,
+            kind: leaveKindFromLabel(text(sheet, 'E' + i)),
+            from: a,
+            to,
+            notes: text(sheet, 'D' + i),
+          })
         else warnings.push(name + ' fila ' + i + ': revisá el fin del rango.')
       } else {
         const name = text(sheet, 'B' + i) || col
@@ -230,7 +243,7 @@ export function parseExcel(
   return { ledger, annualLeave, warnings, comparisons, imported }
 }
 
-export function downloadExcel(ledger: Ledger, settings: Settings, now: string) {
+export function buildWorkbook(ledger: Ledger, settings: Settings, now: string): XLSX.WorkBook {
   const book = XLSX.utils.book_new()
   const serial = (date: string) => daysBetween('1899-12-30', date)
   const make = (name: string, data: unknown[][]) => {
@@ -334,17 +347,22 @@ export function downloadExcel(ledger: Ledger, settings: Settings, now: string) {
     [],
     [],
     [],
-    ['Desde', 'Hasta', 'Días', 'Notas'],
+    ['Desde', 'Hasta', 'Días', 'Notas', 'Tipo'],
     ...ledger.leaves.map((l) => [
       fmtDate(l.from),
       fmtDate(l.to),
       dateRange(l.from, l.to).length,
       l.notes,
+      leaveLabels[l.kind].label,
     ]),
   ])
   make('Feriados', [
     ['Fecha', 'Nombre', 'Tipo'],
     ...ledger.holidays.map((h) => [fmtDate(h.date), h.name, h.kind]),
   ])
-  XLSX.writeFile(book, 'Horas.xlsx')
+  return book
+}
+
+export function downloadExcel(ledger: Ledger, settings: Settings, now: string) {
+  XLSX.writeFile(buildWorkbook(ledger, settings, now), 'Horas.xlsx')
 }
