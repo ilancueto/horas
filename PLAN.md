@@ -21,6 +21,7 @@ Tarjeta de reloj fichador: papel de planilla verde grisáceo, tinta azul de sell
 - [x] 7. Supabase opcional con link mágico, RLS, Realtime, cola/backoff, tombstones, fusión inicial, estado/sincronización manual, cifrado opcional y pruebas de dos sesiones reales o simuladas.
 - [x] 8. PWA instalable, acceso Cargar hoy, offline, README de instalación/despliegue/Supabase/backups, lint, tipos, Vitest, E2E, build y verificación visual a 390 y 1440 px en temas claro/oscuro.
 - [x] Revisiones Playwright móvil/escritorio y dos iteraciones visuales en pantallas principales. Un commit por etapa.
+- [x] 9. Licencias por tipo, pestaña Saldos con saldo inicial de compensatorios, contadores de solo extras, calculadora de extras y estadísticas anuales (extras, promedio semanal, ausencias). Spec en `docs/superpowers/specs/2026-11-22-licencias-saldos-calculadora-design.md`.
 
 ## Decisiones
 
@@ -33,6 +34,13 @@ Tarjeta de reloj fichador: papel de planilla verde grisáceo, tinta azul de sell
 - El decimal de cada período importado se calcula con el redondeo por jornada de Excel. La duración en h:mm se calcula en minutos exactos. Noviembre coincide en 171,42 h y diciembre en 62,66 h según la convención de la planilla.
 - El cifrado protege el JSON de registros en Supabase. Los identificadores y marcas de sincronización son metadatos visibles. La conciliación y el valor hora quedan fuera de la nube.
 - Los avisos locales se comprueban mientras la app está abierta. La compatibilidad de programación en segundo plano varía entre navegadores.
+
+- Licencias: las ausencias (`leaves`) tienen un campo `kind` (vacaciones, enfermedad, mudanza u otra); no hay una colección nueva. Cada tipo tiene etiqueta y color propios en calendario, resumen anual y resumen para RRHH.
+- Saldo inicial de compensatorios (`compOpeningDays`, `compOpeningMinutes`, `compSince`): viaja en las reglas sincronizadas, pero los campos `comp*` son opcionales en el esquema sincronizado para que un dispositivo viejo no pise el saldo local. Un dispositivo nuevo que baja reglas sin esos campos arranca en 0 hasta volver a guardar.
+- Francos por horas al 100%: cada 8 h acumuladas generan un franco. Los tomados cuentan solo hasta hoy. Los días de licencia futuros sí cuentan en el resumen anual.
+- Contadores del período y del resumen anual muestran solo horas extra (50% y 100%). El resumen para RRHH y las exportaciones siguen mostrando las horas normales.
+- Calculadora de extras: usa las horas decimales del período, 1,5 y 2 veces el valor hora. El valor hora es local: no se sincroniza ni se exporta, salvo que se incluya a propósito en el backup JSON.
+- Resumen anual: horas extra del año, promedio semanal sobre las semanas transcurridas (hasta hoy o fin de año), días trabajados, extras por período y ausencias por tipo.
 
 ## Evidencia
 

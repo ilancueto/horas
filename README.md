@@ -38,6 +38,14 @@ El service worker guarda la aplicación, las tipografías y los módulos de impo
 
 Los feriados de 2026 incluyen los días turísticos publicados para ese año. Para 2027 se aplican las reglas de los feriados nacionales de la Ley 27.399. Podés agregar fechas extraordinarias desde **Feriados**. [Ley 27.399](https://www.argentina.gob.ar/normativa/nacional/ley-27399-281835/texto) · [Calendario oficial](https://www.argentina.gob.ar/feriados) · [Resolución 164/2025](https://www.argentina.gob.ar/normativa/nacional/resoluci%C3%B3n-164-2025-421799)
 
+## Licencias, saldos y calculadora de extras
+
+- **Licencias**: en **Más → Licencias** cargás licencias por enfermedad, por mudanza u otras, con su rango de fechas. Se ven en el calendario, en el resumen anual y en el resumen para RRHH, cada una con su color.
+- **Saldos**: la pestaña muestra los francos compensatorios disponibles (ganados con cada 8 h acumuladas al 100%, menos los tomados) y los días de vacaciones del año. Desde **Cargar saldo inicial** podés partir de los francos y las horas al 100% que ya tenías antes de usar la app. El saldo inicial se sincroniza con las reglas de cálculo.
+- **Calculadora de extras**: en **Más → Calculadora de extras** elegís un período y ves cuánto suman las horas al 50% y al 100% con tu valor hora. Es una estimación con las horas decimales del período.
+- El contador del período y el resumen anual muestran solo horas extra. El resumen para RRHH y los archivos exportados siguen mostrando las horas normales.
+- El valor hora queda solo en el dispositivo: no entra en las exportaciones ni en la sincronización, salvo que lo incluyas a propósito en el backup JSON.
+
 ## Activar Supabase
 
 1. Creá un proyecto en Supabase. En **SQL Editor**, ejecutá el archivo de `supabase/migrations/`. Si preferís la CLI, autenticá la CLI, vinculá el proyecto con `supabase link --project-ref TU_REFERENCIA` y aplicá la migración con `supabase db push`. Usá una sola de las dos vías.
@@ -46,7 +54,7 @@ Los feriados de 2026 incluyen los días turísticos publicados para ese año. Pa
 4. Reiniciá Vite o volvé a desplegar. Abrí **Más → Sincronización**, pedí el link de acceso y abrilo en el mismo dispositivo. Repetí el ingreso con el mismo correo en el otro dispositivo. Si ambos ya tienen datos, confirmá la fusión.
 5. Opcionalmente, activá el cifrado con una frase desde **Más → Sincronización**. Necesitás esa frase al abrir una nueva sesión. Los registros ya subidos se cifran al activar la opción. Guardá la frase en un lugar seguro. Sin ella, no se pueden recuperar los registros cifrados de la nube.
 
-Se sincronizan períodos, jornadas, días especiales y reglas de cálculo. El PIN, tema, recordatorios, conciliación y estimación de pago son de cada dispositivo. El PIN controla la pantalla de acceso. El cifrado AES-GCM protege el contenido JSON de los registros en la nube. El identificador de cuenta, la colección, el identificador de registro y las marcas de sincronización siguen siendo visibles para el servidor. Los IDs estables de jornadas, feriados y períodos se derivan de sus fechas.
+Se sincronizan períodos, jornadas, días especiales, licencias y reglas de cálculo (incluido el saldo inicial de compensatorios). El PIN, tema, recordatorios, conciliación y estimación de pago son de cada dispositivo. El PIN controla la pantalla de acceso. El cifrado AES-GCM protege el contenido JSON de los registros en la nube. El identificador de cuenta, la colección, el identificador de registro y las marcas de sincronización siguen siendo visibles para el servidor. Los IDs estables de jornadas, feriados y períodos se derivan de sus fechas.
 
 Los cambios pendientes conservan su revisión hasta confirmarse. Ante cambios concurrentes del mismo registro gana la última escritura aceptada por el servidor. El servidor conserva los borrados lógicos y reconoce los reintentos de una revisión ya aceptada.
 
