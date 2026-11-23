@@ -8,6 +8,7 @@ import {
   leaveBalance,
   overlapsLeave,
   summarize,
+  yearStats,
 } from './hours'
 import {
   blankEntry,
@@ -18,6 +19,7 @@ import {
   rulesRecordSchema,
   settingsSchema,
   type Holiday,
+  type LeaveKind,
   type Period,
 } from './model'
 
@@ -280,5 +282,84 @@ describe('saldo de francos', () => {
     expect(rulesRecordSchema.safeParse({ id: rulesId, ...oldRules, start: 1100 }).success).toBe(
       false,
     )
+  })
+})
+
+describe('estadísticas anuales', () => {
+  const rules = { ...defaults, breakMinutes: 0, start: 480, end: 1020 }
+  const shift = (date: string, start: number, end: number) => ({
+    ...blankEntry(date, rules),
+    start,
+    end,
+  })
+  const leave = (kind: LeaveKind, from: string, to: string) => ({
+    id: crypto.randomUUID(),
+    kind,
+    from,
+    to,
+    notes: '',
+  })
+  const comp = (taken: string | null) => ({
+    id: crypto.randomUUID(),
+    earned: '2026-01-01',
+    reason: '',
+    taken,
+  })
+  const now = '2026-11-22'
+  it('cuenta días calendario de cada licencia dentro del año', () => {
+    const leaves = [
+      leave('vacaciones', '2026-12-30', '2027-01-02'),
+      leave('enfermedad', '2026-03-02', '2026-03-04'),
+      leave('otra', '2025-12-31', '2026-01-01'),
+    ]
+    const ledger = { ...emptyLedger, leaves }
+    expect(yearStats(ledger, rules, '2026', now).leaveDays).toEqual({
+      vacaciones: 2,
+      enfermedad: 3,
+      mudanza: 0,
+      otra: 1,
+    })
+    expect(yearStats(ledger, rules, '2027', now).leaveDays).toEqual({
+      vacaciones: 2,
+      enfermedad: 0,
+      mudanza: 0,
+      otra: 0,
+    })
+  })
+  it('suma extras al 50% y 100% del año hasta hoy y calcula el promedio semanal', () => {
+    const entries = [
+      shift('2026-11-02', 480, 1140), // lunes: 2 h al 50%
+      shift('2026-11-01', 480, 960), // domingo: 8 h al 100%
+      shift('2025-12-31', 480, 1140), // otro año
+      shift('2026-11-29', 480, 960), // futura
+    ]
+    const ledger = { ...emptyLedger, entries }
+    const stats = yearStats(ledger, rules, '2026', now)
+    expect(stats.extra).toBe(600)
+    // 2026-01-01 → 2026-11-22: 326 días
+    expect(stats.weeklyExtra).toBe(Math.round(600 / (326 / 7)))
+    expect(stats.weeklyExtra).toBe(13)
+    const past = yearStats(ledger, rules, '2025', now)
+    expect(past.extra).toBe(120)
+    expect(past.weeklyExtra).toBe(Math.round(120 / (365 / 7)))
+    expect(yearStats(ledger, rules, '2027', now)).toMatchObject({ extra: 0, weeklyExtra: 0 })
+  })
+  it('el promedio semanal usa al menos una semana', () => {
+    const entries = [shift('2026-01-03', 480, 960)] // sábado
+    const stats = yearStats({ ...emptyLedger, entries }, rules, '2026', '2026-01-03')
+    expect(stats.extra).toBe(480)
+    expect(stats.weeklyExtra).toBe(480)
+  })
+  it('cuenta francos ganados y tomados dentro del año', () => {
+    const entries = [
+      shift('2025-12-28', 480, 960),
+      shift('2026-11-01', 480, 960),
+      shift('2026-11-08', 480, 960),
+    ]
+    const comps = [comp('2026-03-10'), comp('2025-12-01'), comp(null), comp('2026-12-20')]
+    const ledger = { ...emptyLedger, entries, comps }
+    // el franco del 2026-12-20 es posterior a hoy: todavía no se tomó
+    expect(yearStats(ledger, rules, '2026', now)).toMatchObject({ compsEarned: 2, compsTaken: 1 })
+    expect(yearStats(ledger, rules, '2025', now)).toMatchObject({ compsEarned: 1, compsTaken: 1 })
   })
 })
