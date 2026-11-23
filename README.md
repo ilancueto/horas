@@ -11,7 +11,7 @@ npm ci
 npm run dev
 ```
 
-Abrí la dirección que indica Vite. En el primer uso elegí **Importar mi Excel** o **Empezar de cero**. La planilla original se conserva en tu carpeta y está excluida de Git y del sitio publicado. La app lee el archivo localmente cuando lo elegís.
+Abrí la dirección que indica Vite. En el primer uso elegí **Importar mi Excel** o **Empezar de cero** (con la sincronización configurada, también **Ya tengo mis datos en la nube**). La planilla original se conserva en tu carpeta y está excluida de Git y del sitio publicado. La app lee el archivo localmente cuando lo elegís.
 
 Para probar la PWA de producción:
 
@@ -54,7 +54,11 @@ La sincronización es opcional. Sin configurar nada, la app queda en **Solo loca
 
 1. El Worker vive en `worker/` y guarda los registros en una base D1. Se despliega con `npm run worker:deploy`.
 2. La URL del Worker se carga al compilar con la variable `VITE_SYNC_URL` (para probar en la compu, copiá `.env.example` a `.env.local`). Es una URL pública, no un secreto.
-3. La clave secreta (`SYNC_KEY`) es un secreto del Worker. En cada dispositivo la pegás una vez en **Más → Sincronización** y queda guardada solo en ese dispositivo. Nunca entra en backups, exportaciones ni en la sincronización, y tampoco en el build ni en el repositorio.
+3. La clave secreta (`SYNC_KEY`) es un secreto del Worker. En el primer dispositivo la pegás una vez en **Más → Sincronización** y queda guardada solo en ese dispositivo. Nunca entra en backups, exportaciones ni en la sincronización, y tampoco en el build ni en el repositorio.
+   - Para sumar otro dispositivo, usá **Más → Sincronización → Vincular otro dispositivo**: abrí ese enlace (o escaneá el QR) en el dispositivo nuevo y se conecta solo, baja tus datos y entra. La clave viaja en el fragmento `#` del enlace, que el navegador no le manda a ningún servidor, y la app la borra de la barra apenas la lee. Usalo solo en tus dispositivos y borrá el mensaje y la entrada del historial después.
+   - También podés tocar **Ya tengo mis datos en la nube** en la bienvenida y pegar la clave. Si la clave no es válida o la nube está vacía, la app te avisa y no deja nada configurado. Si la nube tiene cifrado, te pide la frase de paso antes de entrar.
+   - Ojo: aunque la app borra el enlace de la barra, puede quedar en el historial del navegador (la visita ya se registró al abrirlo) y en el historial del portapapeles si lo copiaste. Borralo a mano: en Chrome, **Historial** (Ctrl+H), buscá la dirección de Horas y eliminá esa entrada; en el celular, lo mismo desde **Historial** del navegador. En Windows, el historial del portapapeles se abre con Win+V (**Borrar todo** o el menú `…` de esa entrada); en el celular, revisá el portapapeles del teclado.
+   - Si compartiste el enlace o la clave por error, cambiá la clave del Worker con `npx wrangler secret put SYNC_KEY --config worker/wrangler.toml` y volvé a conectar cada dispositivo con la clave nueva (**Quitar clave** y **Guardar y conectar**, o un enlace nuevo).
 4. Si dos dispositivos ya tienen datos, el segundo que se conecta ofrece **Fusionar datos** para no perder ni duplicar nada.
 5. Opcionalmente, activá el cifrado con una frase desde **Más → Sincronización**. Necesitás esa frase al abrir una nueva sesión. Los registros ya subidos se cifran al activar la opción. Guardá la frase en un lugar seguro: sin ella no se pueden recuperar los registros cifrados de la nube.
 

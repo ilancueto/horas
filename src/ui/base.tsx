@@ -8,10 +8,13 @@ export function Dialog({
   title,
   close,
   children,
+  busy = false,
 }: {
   title: string
   close: () => void
   children: ReactNode
+  /** Mientras está ocupado, no se puede cerrar (ni con Escape). */
+  busy?: boolean
 }) {
   const ref = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -27,13 +30,13 @@ export function Dialog({
       className="dialog"
       onCancel={(event) => {
         event.preventDefault()
-        close()
+        if (!busy) close()
       }}
       aria-label={title}
     >
       <header className="dialog-head">
         <h2>{title}</h2>
-        <button className="icon" aria-label="Cerrar" onClick={close}>
+        <button className="icon" aria-label="Cerrar" disabled={busy} onClick={close}>
           <X size={20} />
         </button>
       </header>

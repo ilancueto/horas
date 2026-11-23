@@ -239,6 +239,18 @@ export async function saveSettings(patch: Partial<Settings>) {
     return true
   })
 }
+/**
+ * Marca este dispositivo como configurado. `onboarded` es local: se escribe directo en el
+ * meta de ajustes, sin `saveSettings`, para no encolar ni subir reglas por defecto que
+ * pisarían las de la nube.
+ */
+export function markOnboarded() {
+  return serial(async () => {
+    const local = await getMeta('settings', settingsSchema, defaults)
+    await putMeta('settings', { ...local, onboarded: true })
+    await reload()
+  })
+}
 export async function savePrivate(privateData: PrivateData) {
   await putMeta('private', privateSchema.parse(privateData))
   useHours.setState({ privateData })

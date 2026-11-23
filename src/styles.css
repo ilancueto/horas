@@ -1865,3 +1865,15 @@ input[type='checkbox']:checked::after {
     margin-left: 0.1rem;
   }
 }
+
+/* Vincular otro dispositivo: QR negro sobre blanco, legible también en tema oscuro */
+.pairing-qr {
+  display: block;
+  width: min(232px, 100%);
+  height: auto;
+  border: 1.5px solid var(--rule);
+  border-radius: 6px;
+}
+.welcome-connect {
+  margin-top: 4px;
+}

@@ -1,8 +1,15 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Cloud, CloudOff, RefreshCw } from 'lucide-react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react'
+import { Cloud, CloudOff, Copy, Link2, RefreshCw } from 'lucide-react'
 import { z } from 'zod'
 import { liveQuery } from 'dexie'
-import { db, getMeta, putMeta } from '../data/db'
+import { db, getMeta, markOnboarded, notify, putMeta, useHours } from '../data/db'
+import {
+  joinOutcome,
+  pairingLink,
+  takePairingKey,
+  type Connection,
+  type Settled,
+} from '../data/pairing'
 import {
   CloudError,
   cloudConfigured,
@@ -23,10 +30,39 @@ type Merge = { local: number; remote: number; rows: CloudRow[] }
 const invalidKey = 'La clave de sincronización no es válida.'
 const isInvalidKey = (error: unknown) => error instanceof CloudError && error.status === 401
 
+/** Resultado de conectar, más `phrase` = la frase de paso no abre la nube. */
+export type Joined = Connection | 'phrase' | 'connected'
+export const connectionText: Record<Exclude<Joined, 'ok' | 'locked'>, string> = {
+  invalid: invalidKey,
+  empty: 'No encontramos datos en la nube con esa clave. Podés empezar de cero.',
+  error: 'No pudimos conectar. Revisá la conexión y probá de nuevo.',
+  phrase: 'La frase no coincide. Probá de nuevo.',
+  connected: 'Este dispositivo ya está conectado.',
+}
+const lockedLinked =
+  'Dispositivo conectado. Tu nube tiene cifrado: desbloqueala en Más → Sincronización con tu frase de paso.'
+/** Espera del primer ciclo; las pruebas pueden acortarla con `window.__horasConnectTimeout`. */
+const connectTimeout = () =>
+  (globalThis as { __horasConnectTimeout?: number }).__horasConnectTimeout ?? 60_000
+/** Conexión en curso desde la bienvenida o un enlace, hasta que entra o se deshace. */
+type Join = {
+  key: string
+  /** La clave la guardó esta conexión (antes no había ninguna): solo entonces se puede quitar. */
+  owned: boolean
+  previousOwner: unknown
+  generation: number
+  needData: boolean
+}
+
+// Un enlace `#clave=…` se lee y se borra de la barra al cargar el módulo, antes de que
+// cualquier efecto lea la URL. La clave queda solo en memoria hasta aplicarla.
+let pendingLink = typeof location === 'undefined' ? null : takePairingKey(location, history)
+
 export function useSync(enabled: boolean) {
   // La clave vive solo en el meta local del dispositivo: nunca en backups, sync, URLs ni logs.
   // Cada guardado crea un objeto nuevo, así una clave rechazada se puede reintentar al guardarla.
   const [credential, setCredential] = useState<{ key: string } | null>(null)
+  const [loaded, setLoaded] = useState(false)
   const [status, setStatus] = useState<Status>('Solo local')
   const [merge, setMerge] = useState<Merge | null>(null)
   const [encryption, setEncryption] = useState<Encryption | null>(null)
@@ -35,6 +71,16 @@ export function useSync(enabled: boolean) {
   const secret = useRef<{ config: Encryption; key: CryptoKey } | null>(null)
   const perform = useRef<() => Promise<void>>(async () => undefined)
   const confirm = useRef<() => Promise<void>>(async () => undefined)
+  // Quien espera el primer ciclo con una clave recién guardada (ver `connect`).
+  const waiter = useRef<{ key: string; settle: (result: Settled) => void } | null>(null)
+  const flight = useRef<Promise<Joined> | null>(null)
+  const generation = useRef(0)
+  // Sube al deshacer una conexión: un ciclo empezado antes ya no puede volver a vincular.
+  const epoch = useRef(0)
+  const join = useRef<Join | null>(null)
+  const merged = useRef(false)
+  const [connecting, setConnecting] = useState(false)
+  const [joinLocked, setJoinLocked] = useState(false)
   const api = useMemo(
     () => (cloudUrl && credential ? createCloud(cloudUrl, credential.key) : null),
     [credential],
@@ -42,9 +88,13 @@ export function useSync(enabled: boolean) {
 
   useEffect(() => {
     let live = true
-    void getMeta('syncKey', z.string().nullable(), null).then((key) => {
-      if (live && key) setCredential((current) => current ?? { key })
-    })
+    void getMeta('syncKey', z.string().nullable(), null)
+      .catch(() => null)
+      .then((key) => {
+        if (!live) return
+        if (key) setCredential((current) => current ?? { key })
+        setLoaded(true)
+      })
     return () => {
       live = false
     }
@@ -60,12 +110,19 @@ export function useSync(enabled: boolean) {
       return
     }
     const cloud = api
+    const effectKey = credential?.key
     let alive = true
     let running = false
     let again = false
     let failures = 0
     let blocked = false
     let timer: ReturnType<typeof setTimeout> | undefined
+    const finish = (result: Settled) => {
+      const wait = waiter.current
+      if (!alive || !wait || wait.key !== effectKey) return
+      waiter.current = null
+      wait.settle(result)
+    }
     const schedule = (delay = 120) => {
       clearTimeout(timer)
       timer = setTimeout(() => void run(), delay)
@@ -78,6 +135,7 @@ export function useSync(enabled: boolean) {
       setMerge(null)
       setStatus('Error')
       setIssue(invalidKey)
+      finish('invalid')
     }
     async function run(manual = false) {
       if (!alive) return
@@ -89,9 +147,11 @@ export function useSync(enabled: boolean) {
       }
       if (!navigator.onLine) {
         setStatus('Sin conexión')
+        finish('error')
         return
       }
       running = true
+      const started = epoch.current
       try {
         // Sin id de usuario, los datos locales quedan vinculados al origen del servidor.
         const linked = linkedOwner(await getMeta('syncOwner', z.unknown(), ''))
@@ -99,6 +159,7 @@ export function useSync(enabled: boolean) {
         if (linked && linked !== owner) {
           setIssue('Estos datos locales están vinculados a otro servidor de sincronización.')
           setStatus('Error')
+          finish('error')
           return
         }
         const config = await cloud.encryption()
@@ -106,6 +167,7 @@ export function useSync(enabled: boolean) {
         setEncryption(config)
         if (config && secret.current?.config.salt !== config.salt) {
           setStatus('Nube bloqueada')
+          finish('locked')
           return
         }
         const key = config ? secret.current?.key : undefined
@@ -121,9 +183,12 @@ export function useSync(enabled: boolean) {
           if (local && remoteCount) {
             setMerge({ local, remote: remoteCount, rows: remote })
             setStatus('Pendiente')
+            finish('merge')
             return
           }
           await stageInitial(remote)
+          // Una conexión deshecha puede haber restaurado el vínculo: un ciclo viejo no lo pisa.
+          if (!alive || epoch.current !== started) return
           await putMeta('syncOwner', owner)
         }
         if (!alive) return
@@ -136,6 +201,7 @@ export function useSync(enabled: boolean) {
         const pending = await db.queue.count()
         setStatus(pending ? 'Pendiente' : 'Sincronizado')
         if (pending) again = true
+        finish('done')
       } catch (error) {
         if (!alive) return
         if (isInvalidKey(error)) {
@@ -144,6 +210,7 @@ export function useSync(enabled: boolean) {
         }
         setStatus('Error')
         setIssue('No se pudo sincronizar. Tus cambios siguen guardados en este dispositivo.')
+        finish('error')
         failures++
         schedule(retryDelay(failures))
       } finally {
@@ -157,9 +224,12 @@ export function useSync(enabled: boolean) {
     perform.current = () => run(true)
     confirm.current = async () => {
       if (!alive) return
+      const started = epoch.current
       try {
         const remote = await cloud.pull()
+        if (!alive) return
         await stageInitial(remote)
+        if (!alive || epoch.current !== started) return
         await putMeta('syncOwner', owner)
       } catch (error) {
         if (!alive) return
@@ -197,7 +267,7 @@ export function useSync(enabled: boolean) {
       perform.current = async () => undefined
       confirm.current = async () => undefined
     }
-  }, [api, enabled])
+  }, [api, credential, enabled])
   const syncNow = useCallback(() => perform.current(), [])
   async function agree() {
     await confirm.current().catch(() => {
@@ -218,6 +288,189 @@ export function useSync(enabled: boolean) {
     setIssue('')
     setCredential(null)
   }
+  /** Una sola conexión a la vez: una segunda llamada comparte la que está en curso. */
+  function single(task: () => Promise<Joined>): Promise<Joined> {
+    if (flight.current) return flight.current
+    setConnecting(true)
+    const current = task()
+      .catch((): Joined => 'error')
+      .finally(() => {
+        flight.current = null
+        setConnecting(false)
+      })
+    flight.current = current
+    return current
+  }
+  /** Arranca algo que dispara un ciclo y espera a que ese ciclo termine (o venza la espera). */
+  function waitCycle(key: string, start: () => Promise<void>) {
+    return new Promise<Settled>((resolve) => {
+      const timer = setTimeout(() => {
+        if (waiter.current === wait) waiter.current = null
+        resolve('timeout')
+      }, connectTimeout())
+      const wait = {
+        key,
+        settle: (result: Settled) => {
+          clearTimeout(timer)
+          resolve(result)
+        },
+      }
+      waiter.current = wait
+      start().catch(() => {
+        clearTimeout(timer)
+        if (waiter.current === wait) waiter.current = null
+        resolve('error')
+      })
+    })
+  }
+  /** Quita la clave solo si la guardó esta conexión, sigue guardada y no empezó otra después. */
+  async function undo(session: Join) {
+    if (!session.owned || session.generation !== generation.current) return
+    // Antes de cualquier espera: un ciclo en curso ya no puede volver a vincular.
+    epoch.current++
+    if ((await getMeta('syncKey', z.string().nullable(), null)) !== session.key) return
+    await removeKey()
+    await putMeta('syncOwner', session.previousOwner)
+  }
+  async function conclude(session: Join, result: Settled): Promise<Connection> {
+    const { outcome, undo: revert } = joinOutcome(result, {
+      needData: session.needData,
+      periods: useHours.getState().ledger.periods.length,
+    })
+    merged.current = result === 'merge'
+    if (revert) await undo(session)
+    // Nube cifrada en un dispositivo sin configurar: queda esperando la frase de paso.
+    const waiting = outcome === 'locked' && session.needData
+    setJoinLocked(waiting)
+    // Si entró sin configurar, la sesión sigue hasta que `finishJoin` confirme `markOnboarded`.
+    join.current = waiting || (outcome === 'ok' && session.needData) ? session : null
+    return outcome
+  }
+  /** La bienvenida quedó atrás (`markOnboarded` funcionó): ya no hay nada que deshacer. */
+  function finishJoin() {
+    join.current = null
+  }
+  /**
+   * Guarda la clave y espera a que termine el primer ciclo de sincronización.
+   * Con `needData` (dispositivo sin configurar), un ciclo sin períodos cuenta como nube vacía.
+   * Si no queda conectado, quita la clave que guardó y deja el vínculo con el servidor como estaba.
+   */
+  function connect(value: string, needData: boolean): Promise<Joined> {
+    return single(async () => {
+      const key = value.trim()
+      if (!key || !cloudUrl) return 'error'
+      const stored = await getMeta('syncKey', z.string().nullable(), null)
+      const previous = join.current
+      const inherited = Boolean(previous?.owned && stored === previous.key)
+      // Una clave guardada que no es de esta conexión no se pisa. En la bienvenida, la misma
+      // clave que quedó guardada (una conexión que no terminó) sí se puede reintentar y quitar.
+      const leftover = stored === key && needData
+      if (stored !== null && !inherited && !leftover) return 'connected'
+      const session: Join = {
+        key,
+        owned: stored === null || inherited || leftover,
+        previousOwner: inherited
+          ? previous!.previousOwner
+          : await getMeta('syncOwner', z.unknown(), ''),
+        generation: ++generation.current,
+        needData,
+      }
+      join.current = session
+      return conclude(session, await waitCycle(key, () => saveKey(key)))
+    })
+  }
+  /** Paso de la frase de paso cuando la nube está cifrada: desbloquea y espera el ciclo. */
+  function unlock(phrase: string): Promise<Joined> {
+    return single(async () => {
+      const session = join.current
+      // Desde la bienvenida solo se desbloquea una nube ya cifrada; nunca se crea un cifrado.
+      if (!session || !encryption) return 'error'
+      let wrong = false
+      const result = await waitCycle(session.key, async () => {
+        try {
+          await changeEncryption(phrase)
+        } catch (error) {
+          wrong = true
+          throw error
+        }
+      })
+      if (wrong) return 'phrase'
+      return conclude(session, result)
+    })
+  }
+  /** Se abandona la conexión pendiente (por ejemplo, en el paso de la frase de paso). */
+  async function cancelJoin() {
+    const session = join.current
+    join.current = null
+    setJoinLocked(false)
+    if (session) await undo(session)
+    // Una clave que quedó de una conexión sin terminar (por ejemplo, tras recargar): en la
+    // bienvenida no hay otra forma de tener clave, así que se quita.
+    else if (credential && !useHours.getState().settings.onboarded) {
+      epoch.current++
+      await removeKey()
+    }
+  }
+  /** Reintenta con la clave que quedó guardada en la bienvenida. */
+  function resumeJoin(): Promise<Joined> {
+    return credential ? connect(credential.key, true) : Promise.resolve('error')
+  }
+  /** Enlace para vincular otro dispositivo; solo se arma cuando la persona lo pide. */
+  function pairingUrl() {
+    return credential ? pairingLink(location.origin, import.meta.env.BASE_URL, credential.key) : ''
+  }
+  const connectRef = useRef(connect)
+  connectRef.current = connect
+  const [linkOpened, setLinkOpened] = useState(0)
+  useEffect(() => {
+    // Con la app ya abierta, un enlace en la misma pestaña solo cambia el fragmento.
+    const opened = () => {
+      const key = takePairingKey(location, history)
+      if (!key) return
+      pendingLink = key
+      setLinkOpened((n) => n + 1)
+    }
+    addEventListener('hashchange', opened)
+    return () => removeEventListener('hashchange', opened)
+  }, [])
+  useEffect(() => {
+    // Enlace `#clave=…`: se aplica cuando la app está desbloqueada y se sabe si hay clave.
+    if (!enabled || !loaded || !pendingLink) return
+    const key = pendingLink
+    pendingLink = null
+    // Solo local: el fragmento ya se borró de la barra y no se muestra nada nuevo.
+    if (!cloudConfigured) return
+    if (credential) {
+      notify('Este dispositivo ya está conectado.')
+      return
+    }
+    void (async () => {
+      const onboarded = useHours.getState().settings.onboarded
+      // En la bienvenida el aviso "Conectando…" es fijo; en la app, un aviso breve.
+      if (onboarded) notify('Conectando con tu nube…')
+      const outcome = await connectRef.current(key, !onboarded)
+      if (outcome === 'ok') {
+        if (!onboarded) {
+          try {
+            await markOnboarded()
+          } catch {
+            // La sesión sigue: la clave se puede reintentar o quitar desde la bienvenida.
+            notify(connectionText.error)
+            return
+          }
+          finishJoin()
+        }
+        notify(
+          merged.current
+            ? 'Dispositivo conectado. Revisá la fusión de datos.'
+            : 'Dispositivo conectado.',
+        )
+      } else if (outcome === 'locked') {
+        // Sin configurar, la bienvenida muestra el paso de la frase de paso.
+        if (onboarded) notify(lockedLinked)
+      } else notify(connectionText[outcome])
+    })()
+  }, [enabled, loaded, credential, linkOpened])
   async function changeEncryption(phrase: string) {
     if (!api || !enabled) return
     if (encryption) {
@@ -264,6 +517,14 @@ export function useSync(enabled: boolean) {
     hasKey: Boolean(credential),
     saveKey,
     removeKey,
+    connect,
+    unlock,
+    cancelJoin,
+    resumeJoin,
+    finishJoin,
+    connecting,
+    joinLocked,
+    pairingUrl,
   }
 }
 export type SyncState = ReturnType<typeof useSync>
@@ -349,6 +610,7 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
               {sync.issue}
             </p>
           )}
+          <Pairing sync={sync} />
           <h3>Cifrado de extremo a extremo</h3>
           {sync.encryption && sync.status !== 'Nube bloqueada' ? (
             <p className="muted">Cifrado activo para los registros en la nube.</p>
@@ -417,6 +679,241 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
       )}
       {message && <p role="status">{message}</p>}
     </section>
+  )
+}
+
+/** Bienvenida: conectar un dispositivo nuevo con la clave y bajar los datos de la nube. */
+export function ConnectCloud({ sync, close }: { sync: SyncState; close: () => void }) {
+  const [key, setKey] = useState('')
+  const [phrase, setPhrase] = useState('')
+  const [error, setError] = useState('')
+  const [busy, setBusy] = useState(false)
+  const errorId = useId()
+  const working = busy || sync.connecting
+  const locked = sync.joinLocked
+  async function settle(outcome: Joined) {
+    if (outcome === 'ok') {
+      try {
+        // Al marcarlo configurado, la app reemplaza la bienvenida (y este diálogo).
+        await markOnboarded()
+        sync.finishJoin()
+        return
+      } catch {
+        outcome = 'error'
+      }
+    }
+    setBusy(false)
+    // Nube cifrada: el diálogo pasa al paso de la frase de paso.
+    setError(outcome === 'locked' ? '' : connectionText[outcome])
+  }
+  async function dismiss() {
+    if (working) return
+    await sync.cancelJoin()
+    close()
+  }
+  const alert = error && (
+    <p className="warning" role="alert" id={errorId}>
+      {error}
+    </p>
+  )
+  const progress = working && <p role="status">Conectando con tu nube…</p>
+  return (
+    <Dialog title="Conectar con mi nube" busy={working} close={() => void dismiss()}>
+      {locked ? (
+        <form
+          className="stack"
+          noValidate
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (working) return
+            if (!phrase) {
+              setError('Escribí tu frase de paso.')
+              return
+            }
+            setBusy(true)
+            setError('')
+            const outcome = await sync.unlock(phrase)
+            if (outcome === 'phrase') setPhrase('')
+            await settle(outcome)
+          }}
+        >
+          <p>Tu nube tiene cifrado. Escribí tu frase de paso para bajar tus datos.</p>
+          <label>
+            Frase de paso
+            <input
+              type="password"
+              autoComplete="current-password"
+              value={phrase}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+              onChange={(e) => setPhrase(e.target.value)}
+            />
+          </label>
+          {alert}
+          {progress}
+          <div className="actions">
+            <button className="primary" disabled={working}>
+              Desbloquear
+            </button>
+            <button type="button" disabled={working} onClick={() => void dismiss()}>
+              Cancelar
+            </button>
+          </div>
+        </form>
+      ) : (
+        <form
+          className="stack"
+          noValidate
+          onSubmit={async (e) => {
+            e.preventDefault()
+            if (!key.trim()) {
+              setError('Escribí la clave de sincronización.')
+              return
+            }
+            setBusy(true)
+            setError('')
+            // Si ya hay una conexión en curso (por ejemplo, de un enlace), se comparte.
+            await settle(await sync.connect(key, true))
+          }}
+        >
+          <p className="muted">
+            Pegá la clave de sincronización que usás en tus otros dispositivos. Vamos a bajar tus
+            datos de la nube.
+          </p>
+          <label>
+            Clave de sincronización
+            <input
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
+              value={key}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? errorId : undefined}
+              onChange={(e) => setKey(e.target.value)}
+            />
+          </label>
+          {alert}
+          {progress}
+          <div className="actions">
+            <button className="primary" disabled={working}>
+              Conectar
+            </button>
+          </div>
+        </form>
+      )}
+    </Dialog>
+  )
+}
+
+/** QR en SVG: módulos negros sobre una caja blanca con margen, legible también en tema oscuro. */
+function PairingQr({ text }: { text: string }) {
+  const [modules, setModules] = useState<{ text: string; rows: boolean[][] } | null>(null)
+  useEffect(() => {
+    let live = true
+    // La librería del QR se carga recién cuando se pide el enlace.
+    // Si no carga (por ejemplo, sin conexión y sin caché), queda el campo con el enlace.
+    import('../data/qr')
+      .then(({ qrModules }) => {
+        if (live) setModules({ text, rows: qrModules(text) })
+      })
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [text])
+  if (modules?.text !== text) return null
+  const quiet = 4
+  const size = modules.rows.length + quiet * 2
+  const path = modules.rows
+    .flatMap((row, y) =>
+      row.map((dark, x) => (dark ? `M${x + quiet} ${y + quiet}h1v1h-1z` : '')).filter(Boolean),
+    )
+    .join('')
+  return (
+    <svg
+      className="pairing-qr"
+      role="img"
+      aria-label="Código QR para vincular otro dispositivo"
+      viewBox={`0 0 ${size} ${size}`}
+      shapeRendering="crispEdges"
+    >
+      <rect width={size} height={size} rx={1.5} fill="#fff" />
+      <path d={path} fill="#000" />
+    </svg>
+  )
+}
+
+function Pairing({ sync }: { sync: SyncState }) {
+  const [open, setOpen] = useState(false)
+  const [copied, setCopied] = useState('')
+  const field = useRef<HTMLInputElement>(null)
+  const heading = useRef<HTMLHeadingElement>(null)
+  const opener = useRef<HTMLButtonElement>(null)
+  const toggled = useRef(false)
+  useEffect(() => {
+    // Foco al título al abrir y de vuelta al botón al ocultar (no al montar).
+    if (!toggled.current) return
+    if (open) heading.current?.focus()
+    else opener.current?.focus()
+  }, [open])
+  function toggle(next: boolean) {
+    toggled.current = true
+    setOpen(next)
+    if (!next) setCopied('')
+  }
+  // La clave solo está en el DOM mientras el enlace está a la vista.
+  const url = open ? sync.pairingUrl() : ''
+  async function copy() {
+    try {
+      if (!navigator.clipboard) throw new Error('Sin portapapeles')
+      await navigator.clipboard.writeText(url)
+      setCopied('Enlace copiado.')
+    } catch {
+      field.current?.select()
+      setCopied('No se pudo copiar. Seleccioná el enlace y copialo a mano.')
+    }
+  }
+  if (!open)
+    return (
+      <div className="actions">
+        <button ref={opener} onClick={() => toggle(true)}>
+          <Link2 size={16} /> Vincular otro dispositivo
+        </button>
+      </div>
+    )
+  return (
+    <div className="stack pairing">
+      <h3 ref={heading} tabIndex={-1}>
+        Vincular otro dispositivo
+      </h3>
+      <p className="muted">
+        Abrí este enlace o escaneá el código en el otro dispositivo para conectarlo sin escribir la
+        clave.
+      </p>
+      <p className="warning">
+        Este enlace contiene tu clave. Usalo solo en tus dispositivos y borrá el mensaje y la
+        entrada del historial después.
+      </p>
+      <label>
+        Enlace para vincular
+        <input
+          ref={field}
+          readOnly
+          value={url}
+          spellCheck={false}
+          autoComplete="off"
+          onFocus={(e) => e.currentTarget.select()}
+        />
+      </label>
+      {url && <PairingQr text={url} />}
+      <div className="actions">
+        <button className="primary" onClick={() => void copy()}>
+          <Copy size={16} /> Copiar enlace
+        </button>
+        <button onClick={() => toggle(false)}>Ocultar enlace</button>
+      </div>
+      {copied && <p role="status">{copied}</p>}
+    </div>
   )
 }
 
