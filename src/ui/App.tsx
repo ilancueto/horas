@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   Activity,
+  Calculator as CalculatorIcon,
   CalendarDays,
   Clock3,
   HelpCircle,
@@ -23,6 +24,7 @@ import { Annual, Calendar } from './Calendar'
 import { DataTools, ImportExcel, Report } from './Transfer'
 import { Absences, type AbsenceView } from './Absences'
 import { Balances } from './Balances'
+import { Calculator } from './Calculator'
 import { Help, Lock, Onboarding, Preferences, Reconcile } from './Settings'
 import { MergeSync, SyncPanel, useSync } from './Sync'
 import { checkReminders, pinSchema, type Pin } from '../data/preferences'
@@ -43,6 +45,7 @@ export function App() {
   const [day, setDay] = useState('')
   const [requestedDay, setRequestedDay] = useState('')
   const [draft, setDraft] = useState<Period>()
+  const [calcPeriod, setCalcPeriod] = useState('')
   const [modal, setModal] = useState('')
   const [pin, setPin] = useState<Pin | null>(null)
   const [pinReady, setPinReady] = useState(false)
@@ -116,6 +119,10 @@ export function App() {
     if (document.startViewTransition && !matchMedia('(prefers-reduced-motion: reduce)').matches)
       document.startViewTransition(run)
     else run()
+  }
+  function calculate() {
+    setCalcPeriod(period?.id ?? '')
+    move('calculator')
   }
   function closeDraft() {
     setDraft(undefined)
@@ -273,6 +280,14 @@ export function App() {
               openDay={openDay}
               report={() => setModal('report')}
               reconcile={() => setModal('receipt')}
+              calculate={calculate}
+            />
+          )}
+          {view === 'calculator' && (
+            <Calculator
+              periodId={calcPeriod || undefined}
+              today={now}
+              openSettings={() => setModal('settings')}
             />
           )}
           {view === 'calendar' && <Calendar today={now} open={openDay} />}
@@ -298,6 +313,9 @@ export function App() {
                 <button onClick={() => move('leaves')}>Vacaciones</button>
                 <button onClick={() => move('licenses')}>Licencias</button>
                 <button onClick={() => move('holidays')}>Feriados</button>
+                <button onClick={calculate}>
+                  <CalculatorIcon size={18} /> Calculadora de extras
+                </button>
                 <button onClick={() => setModal('settings')}>
                   <SettingsIcon size={18} /> Ajustes
                 </button>

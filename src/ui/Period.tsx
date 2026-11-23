@@ -130,6 +130,7 @@ export function PeriodView({
   openDay,
   report,
   reconcile,
+  calculate,
 }: {
   period?: Period
   periods: Period[]
@@ -141,6 +142,7 @@ export function PeriodView({
   openDay: (day: string) => void
   report: () => void
   reconcile: () => void
+  calculate: () => void
 }) {
   const { ledger, settings } = useHours()
   const [filter, setFilter] = useState('all')
@@ -241,6 +243,7 @@ export function PeriodView({
         <button onClick={edit}>Editar período</button>
         <button onClick={report}>Resumen para RRHH</button>
         <button onClick={reconcile}>Conciliar recibo</button>
+        <button onClick={calculate}>¿Cuánto valen?</button>
       </div>
       <section className="overview overview-period" aria-label="Totales del período">
         <div className="tile total-tile">

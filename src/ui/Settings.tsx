@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react'
 import { Clock3, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
 import { clock, decimal, number } from '../domain/dates'
-import { compMinutes, decimalTotals, summarize, type DayRow } from '../domain/hours'
+import { compMinutes, decimalTotals, type DayRow } from '../domain/hours'
+import { ars, extraPay } from '../domain/pay'
 import {
   defaults,
   emptyLedger,
@@ -436,7 +437,7 @@ export function Preferences({
               checked={enabled}
               onChange={(e) => setEnabled(e.target.checked)}
             />{' '}
-            Estimar el pago en este dispositivo
+            Valor hora para calcular extras
           </label>
           {enabled && (
             <label>
@@ -517,15 +518,13 @@ export function Reconcile({
   const saved = privateData.receipt[period.id]
   const [extra, setExtra] = useState(saved?.extra?.toString() ?? '')
   const [double, setDouble] = useState(saved?.double?.toString() ?? '')
-  const totals = summarize(rows)
   const reported = decimalTotals(rows, Boolean(period.excel))
   const delta = (reportedHours: number, paid: string) =>
     paid === '' ? null : Math.round((Number(paid) - reportedHours) * 100) / 100
   const diff50 = delta(reported.extra, extra),
     diff100 = delta(reported.double, double)
   const rate = privateData.rate
-  const ars = (value: number) =>
-    new Intl.NumberFormat('es-AR', { style: 'currency', currency: 'ARS' }).format(value)
+  const pay = extraPay(reported, rate ?? 0)
   return (
     <Dialog title="Conciliar recibo" close={close}>
       <form
@@ -588,12 +587,10 @@ export function Reconcile({
         )}
         {rate !== null && (
           <div className="tile">
-            <span>Bruto estimado del período</span>
-            <strong>
-              {ars((rate * (totals.normal + totals.extra * 1.5 + totals.double * 2)) / 60)}
-            </strong>
+            <span>Extras estimadas del período</span>
+            <strong>{ars(pay.total)}</strong>
             <small>
-              Hora normal {ars(rate)} · 50% {ars(rate * 1.5)} · 100% {ars(rate * 2)}
+              50% {ars(pay.extra)} · 100% {ars(pay.double)}
             </small>
           </div>
         )}
