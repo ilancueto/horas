@@ -4,6 +4,9 @@ export const day = z.iso.date()
 const id = z.uuid()
 const minute = z.number().int().min(0).max(1439)
 const duration = z.number().int().min(0).max(1440)
+const compSince = day.nullable()
+const compOpeningDays = z.number().int().min(0).max(999)
+const compOpeningMinutes = z.number().int().min(0).max(479)
 export const settingsSchema = z.object({
   start: minute,
   end: minute,
@@ -20,6 +23,9 @@ export const settingsSchema = z.object({
   dailyReminder: z.boolean(),
   reminderTime: minute,
   closingReminder: z.number().int().min(0).max(14),
+  compSince: compSince.default(null),
+  compOpeningDays: compOpeningDays.default(0),
+  compOpeningMinutes: compOpeningMinutes.default(0),
 })
 export const defaults: Settings = {
   start: 465,
@@ -37,20 +43,31 @@ export const defaults: Settings = {
   dailyReminder: false,
   reminderTime: 1080,
   closingReminder: 0,
+  compSince: null,
+  compOpeningDays: 0,
+  compOpeningMinutes: 0,
 }
 export type Settings = z.infer<typeof settingsSchema>
 export const rulesId = '30000000-0000-4000-8000-000000000001'
-export const rulesSchema = settingsSchema.pick({
-  start: true,
-  end: true,
-  breakMinutes: true,
-  saturday: true,
-  early: true,
-  nonWorking: true,
-  closing: true,
-  annualLeave: true,
-  lockClosed: true,
-})
+// El saldo inicial es opcional y sin default en las reglas sincronizadas: un registro
+// escrito por una versión vieja no lo trae y así no pisa el valor local en readSettings.
+export const rulesSchema = settingsSchema
+  .pick({
+    start: true,
+    end: true,
+    breakMinutes: true,
+    saturday: true,
+    early: true,
+    nonWorking: true,
+    closing: true,
+    annualLeave: true,
+    lockClosed: true,
+  })
+  .extend({
+    compSince: compSince.optional(),
+    compOpeningDays: compOpeningDays.optional(),
+    compOpeningMinutes: compOpeningMinutes.optional(),
+  })
 export const rulesRecordSchema = rulesSchema
   .extend({ id })
   .refine((rules) => rules.start < rules.end)

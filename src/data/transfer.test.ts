@@ -15,3 +15,13 @@ it('restaura un backup viejo sin tipo', () => {
   const out = readBackup(JSON.stringify(old))
   expect(out.ledger.leaves[0].kind).toBe('vacaciones')
 })
+it('restaura un backup sin saldo inicial de francos', () => {
+  const { compSince, compOpeningDays, compOpeningMinutes, ...settings } = defaults
+  void compSince
+  void compOpeningDays
+  void compOpeningMinutes
+  const out = readBackup(
+    JSON.stringify({ version: 1, created: '2026-03-01', ledger: emptyLedger, settings }),
+  )
+  expect(out.settings).toMatchObject({ compSince: null, compOpeningDays: 0, compOpeningMinutes: 0 })
+})

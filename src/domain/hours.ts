@@ -194,3 +194,45 @@ export function leaveBalance(leaves: Ledger['leaves'], year: string, available: 
 }
 export const overlapsLeave = (leaves: Ledger['leaves'], range: Ledger['leaves'][number]) =>
   leaves.some((l) => l.id !== range.id && l.from <= range.to && l.to >= range.from)
+
+export const compMinutes = 480
+export type CompBalance = {
+  opening: number
+  accumulated: number
+  earned: number
+  remainder: number
+  missing: number
+  taken: number
+  available: number
+  earnedDates: string[]
+}
+export function compBalance(ledger: Ledger, settings: Settings, now: string): CompBalance {
+  const { compSince, compOpeningDays, compOpeningMinutes } = settings
+  const after = (date: string) => compSince === null || date > compSince
+  const holidays = holidayMap(ledger)
+  const entries = ledger.entries
+    .filter((entry) => after(entry.date) && entry.date <= now)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  let accumulated = compOpeningMinutes
+  const earnedDates: string[] = []
+  for (const entry of entries) {
+    const before = Math.floor(accumulated / compMinutes)
+    accumulated += calculate(entry, settings, holidays).double
+    for (let k = before; k < Math.floor(accumulated / compMinutes); k++)
+      earnedDates.push(entry.date)
+  }
+  const remainder = accumulated % compMinutes
+  const taken = ledger.comps.filter(
+    (comp) => comp.taken !== null && comp.taken <= now && after(comp.taken),
+  ).length
+  return {
+    opening: compOpeningDays,
+    accumulated,
+    earned: earnedDates.length,
+    remainder,
+    missing: compMinutes - remainder,
+    taken,
+    available: compOpeningDays + earnedDates.length - taken,
+    earnedDates,
+  }
+}
