@@ -8,6 +8,7 @@ import {
   ListChecks,
   Menu,
   Plus,
+  Scale,
   Settings as SettingsIcon,
   Undo2,
   Redo2,
@@ -21,14 +22,16 @@ import { PeriodEditor, PeriodView } from './Period'
 import { Annual, Calendar } from './Calendar'
 import { DataTools, ImportExcel, Report } from './Transfer'
 import { Absences, type AbsenceView } from './Absences'
+import { Balances } from './Balances'
 import { Help, Lock, Onboarding, Preferences, Reconcile } from './Settings'
 import { MergeSync, SyncPanel, useSync } from './Sync'
 import { checkReminders, pinSchema, type Pin } from '../data/preferences'
 
-type View = 'period' | 'calendar' | 'annual' | 'more' | AbsenceView
+type View = 'period' | 'calendar' | 'balances' | 'calculator' | 'annual' | 'more' | AbsenceView
 const nav = [
   ['period', 'Período', ListChecks],
   ['calendar', 'Calendario', CalendarDays],
+  ['balances', 'Saldos', Scale],
   ['annual', 'Resumen anual', Activity],
   ['more', 'Más', Menu],
 ] as const
@@ -277,7 +280,16 @@ export function App() {
           {(view === 'comps' ||
             view === 'leaves' ||
             view === 'licenses' ||
-            view === 'holidays') && <Absences key={view} view={view} today={now} />}
+            view === 'holidays') && (
+            <Absences key={view} view={view} today={now} openBalances={() => move('balances')} />
+          )}
+          {view === 'balances' && (
+            <Balances
+              today={now}
+              openSettings={() => setModal('settings-comps')}
+              openComps={() => move('comps')}
+            />
+          )}
           {view === 'more' && (
             <section className="stack">
               <h1>Más</h1>
@@ -329,10 +341,11 @@ export function App() {
           previous={ledger.entries.find((e) => e.date === addDays(day, -1))}
         />
       )}
-      {modal === 'settings' && (
+      {(modal === 'settings' || modal === 'settings-comps') && (
         <Preferences
           close={() => setModal('')}
           today={now}
+          focusComps={modal === 'settings-comps'}
           pin={pin}
           pinChanged={(value) => {
             setPin(value)

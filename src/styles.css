@@ -1162,6 +1162,58 @@ small,
 .year-picker {
   width: 130px;
 }
+
+/* Saldos */
+.balances h2 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.balances .absence-summary {
+  margin-bottom: 0;
+}
+.balance-big {
+  font-size: 1.1rem;
+  font-weight: 650;
+}
+.balance-big strong {
+  font: 800 clamp(2.8rem, 5vw, 4.2rem) / 0.9 var(--display);
+  font-variant-numeric: tabular-nums;
+  color: var(--accent);
+}
+.balance-big.warning strong {
+  color: var(--danger);
+}
+.balance-progress {
+  display: grid;
+  gap: 6px;
+}
+.balance-progress progress {
+  appearance: none;
+  width: 100%;
+  max-width: 520px;
+  height: 18px;
+  border: 0;
+  border-radius: 0;
+  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+  overflow: hidden;
+}
+.balance-progress progress::-webkit-progress-bar {
+  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+}
+.balance-progress progress::-webkit-progress-value {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+}
+.balance-progress progress::-moz-progress-bar {
+  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+}
+.balance-link {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .comparison {
   overflow: auto;
 }
@@ -1295,7 +1347,7 @@ small,
   .bottom-nav {
     position: fixed;
     display: grid;
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(5, minmax(0, 1fr));
     gap: 4px;
     inset: auto 0 0;
     z-index: 3;

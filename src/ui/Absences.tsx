@@ -1,7 +1,7 @@
 import { useState } from 'react'
-import { CalendarOff, Palmtree, Plus, Repeat2, Stethoscope, Trash2 } from 'lucide-react'
+import { CalendarOff, Palmtree, Plus, Repeat2, Scale, Stethoscope, Trash2 } from 'lucide-react'
 import { daysBetween, fmtDate } from '../domain/dates'
-import { calculate, holidayMap, leaveBalance, overlapsLeave } from '../domain/hours'
+import { calculate, holidayMap, overlapsLeave } from '../domain/hours'
 import {
   collections,
   leaveKinds,
@@ -24,10 +24,17 @@ const config = {
   licenses: { title: 'Licencias', one: 'licencia', icon: Stethoscope, tone: 'lic' },
   holidays: { title: 'Feriados', one: 'feriado', icon: CalendarOff, tone: 'week' },
 }
-export function Absences({ view, today }: { view: AbsenceView; today: string }) {
-  const { ledger, settings } = useHours()
+export function Absences({
+  view,
+  today,
+  openBalances,
+}: {
+  view: AbsenceView
+  today: string
+  openBalances: () => void
+}) {
+  const { ledger } = useHours()
   const [form, setForm] = useState<{ item?: Item<AbsenceCollection> } | null>(null)
-  const [year, setYear] = useState(today.slice(0, 4))
   const { title, one, tone } = config[view]
   const items: Item<AbsenceCollection>[] =
     view === 'leaves'
@@ -35,14 +42,6 @@ export function Absences({ view, today }: { view: AbsenceView; today: string }) 
       : view === 'licenses'
         ? ledger.leaves.filter((l) => l.kind !== 'vacaciones')
         : ledger[view]
-  const pending = ledger.comps.filter((c) => !c.taken).length
-  const balance = leaveBalance(ledger.leaves, year, settings.annualLeave)
-  const years = [
-    ...new Set([
-      today.slice(0, 4),
-      ...ledger.leaves.flatMap((l) => [l.from.slice(0, 4), l.to.slice(0, 4)]),
-    ]),
-  ].sort()
   const sortKey = (i: Item<AbsenceCollection>) =>
     'date' in i ? i.date : 'earned' in i ? i.earned : i.from
   return (
@@ -56,42 +55,12 @@ export function Absences({ view, today }: { view: AbsenceView; today: string }) 
         </button>
       </div>
       {view === 'comps' && (
-        <div className="absence-summary">
-          {[
-            [pending, 'Pendientes'],
-            [items.length - pending, 'Tomados'],
-            [items.length, 'En total'],
-          ].map(([n, label]) => (
-            <div className="tile" key={label}>
-              <span>{label}</span>
-              <strong>{n}</strong>
-            </div>
-          ))}
-        </div>
-      )}
-      {view === 'leaves' && (
-        <>
-          <label className="year-picker">
-            Año
-            <select value={year} onChange={(e) => setYear(e.target.value)}>
-              {years.map((y) => (
-                <option key={y}>{y}</option>
-              ))}
-            </select>
-          </label>
-          <div className="absence-summary">
-            {[
-              [settings.annualLeave, 'Disponibles'],
-              [balance.used, 'Tomados'],
-              [balance.remaining, 'Saldo'],
-            ].map(([n, label]) => (
-              <div className="tile" key={label}>
-                <span>{label}</span>
-                <strong>{n}</strong>
-              </div>
-            ))}
-          </div>
-        </>
+        <p className="balance-link">
+          <span className="muted">Los francos disponibles se calculan en Saldos.</span>
+          <button onClick={openBalances}>
+            <Scale size={16} aria-hidden="true" /> Ver saldo
+          </button>
+        </p>
       )}
       <div className="panel">
         {!items.length ? (

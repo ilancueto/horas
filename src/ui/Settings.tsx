@@ -1,7 +1,7 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Clock3, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
 import { clock, decimal, number } from '../domain/dates'
-import { decimalTotals, summarize, type DayRow } from '../domain/hours'
+import { compMinutes, decimalTotals, summarize, type DayRow } from '../domain/hours'
 import {
   defaults,
   emptyLedger,
@@ -183,13 +183,18 @@ export function Preferences({
   pin,
   pinChanged,
   today,
+  focusComps,
 }: {
   close: () => void
   pin: Pin | null
   pinChanged: (pin: Pin | null) => void
   today: string
+  focusComps?: boolean
 }) {
   const { settings, privateData } = useHours()
+  useEffect(() => {
+    if (focusComps) document.getElementById('saldo-inicial')?.scrollIntoView({ block: 'start' })
+  }, [focusComps])
   const [draft, setDraft] = useState(settings)
   const [rate, setRate] = useState(privateData.rate?.toString() ?? '')
   const [enabled, setEnabled] = useState(privateData.rate !== null)
@@ -319,6 +324,46 @@ export function Preferences({
                 <option value="normal">Normal</option>
                 <option value="double">Al 100%</option>
               </select>
+            </label>
+          </div>
+          <h4 id="saldo-inicial">Saldo inicial de compensatorios</h4>
+          <small>
+            Si ya tenías francos o horas al 100% acumuladas, cargalos acá. Solo se suman las
+            jornadas posteriores a esa fecha.
+          </small>
+          <div className="form-grid">
+            <label>
+              Fecha del saldo inicial
+              <input
+                type="date"
+                aria-label="Fecha del saldo inicial"
+                value={draft.compSince ?? ''}
+                onChange={(e) => patch({ compSince: e.target.value || null })}
+              />
+            </label>
+            <label>
+              Francos disponibles
+              <input
+                type="number"
+                min={0}
+                max={999}
+                required
+                aria-label="Francos disponibles"
+                value={draft.compOpeningDays}
+                onChange={(e) => patch({ compOpeningDays: e.target.valueAsNumber || 0 })}
+              />
+            </label>
+            <label>
+              Horas sobrantes al 100%
+              <TimeField
+                value={draft.compOpeningMinutes}
+                label="Horas sobrantes al 100%"
+                save={(minutes) => {
+                  if ((minutes ?? 0) >= compMinutes)
+                    notify('Las horas sobrantes tienen que ser menos de 8:00.')
+                  else patch({ compOpeningMinutes: minutes ?? 0 })
+                }}
+              />
             </label>
           </div>
           <label className="check">
