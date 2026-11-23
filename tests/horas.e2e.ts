@@ -146,9 +146,10 @@ test('carga jornadas, guardia y ausencias, descarga XLSX/PDF/JSON y restaura', a
   await download(page, 'Descargar backup y restaurar')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await nav(page, 'Período').click()
-  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText(
-    /días? trabajados?/,
-  )
+  const restored = page.getByRole('region', { name: 'Totales del período' })
+  await expect(restored).toContainText('0:35')
+  await expect(restored).toContainText('1 día trabajado')
+  await expect(restored).not.toContainText('0 días trabajados')
 })
 test('carga licencias por tipo', async ({ page }) => {
   await start(page)
@@ -183,8 +184,10 @@ test('muestra saldos de francos y vacaciones', async ({ page }) => {
   await start(page)
   await nav(page, 'Más').click()
   await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
-  await page.getByLabel('Fecha del saldo inicial').fill('2026-11-01')
   await page.getByLabel('Francos disponibles').fill('2')
+  await page.getByRole('button', { name: 'Guardar ajustes' }).click()
+  await expect(page.getByText('Elegí la fecha del saldo inicial.')).toBeVisible()
+  await page.getByLabel('Fecha del saldo inicial').fill('2026-11-01')
   await page.getByLabel('Horas sobrantes al 100%').fill('08:00')
   await page.getByLabel('Horas sobrantes al 100%').press('Tab')
   await expect(page.getByText('Las horas sobrantes tienen que ser menos de 8:00.')).toBeVisible()

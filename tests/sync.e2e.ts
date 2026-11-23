@@ -194,16 +194,21 @@ test('fusiona y sincroniza dos perfiles de navegador con Supabase simulado', asy
     await a.getByRole('button', { name: 'Cargar hoy' }).click()
     await a.getByRole('button', { name: 'Horario estándar' }).click()
     await a.getByRole('button', { name: 'Guardar jornada' }).click()
-    await expect(a.getByRole('region', { name: 'Totales del período' })).toContainText('1 día trabajado')
+    await expect(a.getByRole('region', { name: 'Totales del período' })).toContainText(
+      '1 día trabajado',
+    )
     expect([...remote.values()].filter((r) => r.collection === 'entries')).toHaveLength(0)
     await first.setOffline(false)
     await expect
       .poll(() => [...remote.values()].filter((r) => r.collection === 'entries').length)
       .toBe(1)
     await period(b)
-    await expect(b.getByRole('region', { name: 'Totales del período' })).toContainText('1 día trabajado', {
-      timeout: 10000,
-    })
+    await expect(b.getByRole('region', { name: 'Totales del período' })).toContainText(
+      '1 día trabajado',
+      {
+        timeout: 10000,
+      },
+    )
   } finally {
     await first.close()
     await second.close()

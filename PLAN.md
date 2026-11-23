@@ -37,6 +37,8 @@ Tarjeta de reloj fichador: papel de planilla verde grisáceo, tinta azul de sell
 
 - Licencias: las ausencias (`leaves`) tienen un campo `kind` (vacaciones, enfermedad, mudanza u otra); no hay una colección nueva. Cada tipo tiene etiqueta y color propios en calendario, resumen anual y resumen para RRHH.
 - Saldo inicial de compensatorios (`compOpeningDays`, `compOpeningMinutes`, `compSince`): viaja en las reglas sincronizadas, pero los campos `comp*` son opcionales en el esquema sincronizado para que un dispositivo viejo no pise el saldo local. Un dispositivo nuevo que baja reglas sin esos campos arranca en 0 hasta volver a guardar.
+- Antes de usar Licencias hay que actualizar la app en todos los dispositivos: uno con versión vieja descarta `kind` y lee la licencia como vacaciones.
+- Un dispositivo con versión vieja que guarda reglas puede quitar el saldo inicial, y uno nuevo que después baja y edita las reglas puede pisarlo en los demás. Si pasa, se vuelve a cargar desde Ajustes.
 - Francos por horas al 100%: cada 8 h acumuladas generan un franco. Los tomados cuentan solo hasta hoy. Los días de licencia futuros sí cuentan en el resumen anual.
 - Contadores del período y del resumen anual muestran solo horas extra (50% y 100%). El resumen para RRHH y las exportaciones siguen mostrando las horas normales.
 - Calculadora de extras: usa las horas decimales del período, 1,5 y 2 veces el valor hora. El valor hora es local: no se sincroniza ni se exporta, salvo que se incluya a propósito en el backup JSON.

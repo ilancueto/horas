@@ -74,7 +74,7 @@ export function Calculator({
         </small>
         {saved === null && (
           <div className="balance-link">
-            <p>Cargá tu valor hora en Ajustes para no tener que repetirlo</p>
+            <p>Cargá tu valor hora en Ajustes para no tener que repetirlo.</p>
             <button onClick={openSettings}>Ajustes</button>
           </div>
         )}

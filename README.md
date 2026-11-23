@@ -45,6 +45,8 @@ Los feriados de 2026 incluyen los días turísticos publicados para ese año. Pa
 - **Calculadora de extras**: en **Más → Calculadora de extras** elegís un período y ves cuánto suman las horas al 50% y al 100% con tu valor hora. Es una estimación con las horas decimales del período.
 - El contador del período y el resumen anual muestran solo horas extra. El resumen para RRHH y los archivos exportados siguen mostrando las horas normales.
 - El valor hora queda solo en el dispositivo: no entra en las exportaciones ni en la sincronización, salvo que lo incluyas a propósito en el backup JSON.
+- Antes de usar Licencias, actualizá la app en todos tus dispositivos: uno con una versión vieja descarta el tipo de licencia y la lee como vacaciones.
+- Un dispositivo con una versión vieja que guarde las reglas puede borrar el saldo inicial, y uno nuevo que después baje y edite las reglas puede pisarlo en los demás. Si pasa, volvé a cargarlo desde Ajustes.
 
 ## Activar Supabase
 

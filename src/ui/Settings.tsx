@@ -276,6 +276,21 @@ export function Preferences({
             e.preventDefault()
             if (e.currentTarget.querySelector('[aria-invalid=true]')) return
             setError('')
+            if (
+              draft.compSince === null &&
+              (draft.compOpeningDays > 0 || draft.compOpeningMinutes > 0)
+            ) {
+              setError('Elegí la fecha del saldo inicial.')
+              return
+            }
+            if (
+              !Number.isInteger(draft.compOpeningDays) ||
+              draft.compOpeningDays < 0 ||
+              draft.compOpeningDays > 999
+            ) {
+              setError('Los francos disponibles tienen que ser un número entero entre 0 y 999.')
+              return
+            }
             if (!settingsSchema.safeParse(draft).success || draft.start >= draft.end) {
               setError(
                 'Revisá los valores. La salida habitual tiene que ser posterior a la entrada.',
@@ -348,6 +363,7 @@ export function Preferences({
                 type="number"
                 min={0}
                 max={999}
+                step={1}
                 required
                 aria-label="Francos disponibles"
                 value={draft.compOpeningDays}
