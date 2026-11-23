@@ -1,0 +1,15 @@
+name = "horas-sync"
+main = "src/index.ts"
+compatibility_date = "2026-11-01"
+
+[vars]
+# Lista separada por comas. En desarrollo se agregan http://127.0.0.1:5180 y http://localhost:5173.
+ALLOWED_ORIGIN = "https://ilancueto.github.io"
+
+# SYNC_KEY es un secreto: `wrangler secret put SYNC_KEY` (nunca en este archivo).
+
+[[d1_databases]]
+binding = "DB"
+database_name = "horas"
+# Marcador: el id real se completa en Task 8 tras `wrangler d1 create horas`.
+database_id = "00000000-0000-0000-0000-000000000000"
