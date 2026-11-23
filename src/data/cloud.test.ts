@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { CloudError, createCloud } from './cloud'
+import { CloudError, createCloud, linkedOwner, parseCloudUrl } from './cloud'
 import type { ChangePacket } from './syncEngine'
 
 const KEY = 'secret-key'
@@ -157,4 +157,42 @@ describe('createCloud', () => {
     expect(init.method).toBe('POST')
     expect(JSON.parse(init.body)).toEqual({ config: encryption, changes })
   })
+})
+
+describe('parseCloudUrl', () => {
+  it.each([
+    undefined,
+    '',
+    '   ',
+    'horas.workers.dev',
+    '/relative',
+    'ftp://x',
+    'https://',
+    'nota url',
+  ])('descarta %j como no configurado', (raw) => {
+    expect(parseCloudUrl(raw)).toBeUndefined()
+  })
+  it('acepta http(s) y quita las barras finales', () => {
+    expect(parseCloudUrl('https://horas.example.workers.dev/')).toBe(
+      'https://horas.example.workers.dev',
+    )
+    expect(parseCloudUrl(' https://horas.example.workers.dev/api// ')).toBe(
+      'https://horas.example.workers.dev/api',
+    )
+    expect(parseCloudUrl('http://127.0.0.1:8787')).toBe('http://127.0.0.1:8787')
+  })
+})
+
+describe('linkedOwner', () => {
+  it('conserva un origen http(s)', () => {
+    expect(linkedOwner('https://horas.example.workers.dev')).toBe(
+      'https://horas.example.workers.dev',
+    )
+  })
+  it.each(['', '00100000-0000-4000-a000-000000000001', 'ftp://x', 'https://x.dev/ruta', 42, null])(
+    'trata %j (dueño heredado o inválido) como no vinculado',
+    (stored) => {
+      expect(linkedOwner(stored)).toBe('')
+    },
+  )
 })

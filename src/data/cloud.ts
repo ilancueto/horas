@@ -2,10 +2,37 @@ import { z } from 'zod'
 import { encryptionSchema, type Encryption } from './crypto'
 import { cloudRowSchema, type Backend, type ChangePacket } from './syncEngine'
 
-const configured = import.meta.env.VITE_SYNC_URL as string | undefined
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
-export const cloudUrl: string | undefined = configured ? trimSlash(configured) : undefined
+const httpUrl = (value: string) => {
+  try {
+    const url = new URL(value)
+    return url.protocol === 'https:' || url.protocol === 'http:' ? url : undefined
+  } catch {
+    return undefined
+  }
+}
+
+/** Valida `VITE_SYNC_URL`: solo una URL http(s) absoluta cuenta como configurada. */
+export function parseCloudUrl(raw: string | undefined): string | undefined {
+  const value = trimSlash(raw?.trim() ?? '')
+  return value && httpUrl(value) ? value : undefined
+}
+
+/**
+ * Dueño guardado de los datos locales. Si no es un origen http(s) (p. ej. el id de usuario
+ * heredado de Supabase), se trata como no vinculado para que el diálogo de fusión proteja los datos.
+ */
+export function linkedOwner(stored: unknown): string {
+  if (typeof stored !== 'string') return ''
+  return httpUrl(stored)?.origin === stored ? stored : ''
+}
+
+export const cloudUrl = parseCloudUrl(import.meta.env.VITE_SYNC_URL as string | undefined)
 export const cloudConfigured = Boolean(cloudUrl)
+const cloudAddress = cloudUrl ? httpUrl(cloudUrl) : undefined
+/** Origen del servidor configurado (identifica al dueño de los datos locales). */
+export const cloudOrigin = cloudAddress?.origin ?? ''
+export const cloudHost = cloudAddress?.host ?? ''
 
 const PAGE = 500
 

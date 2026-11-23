@@ -1,6 +1,42 @@
-import { expect, it } from 'vitest'
-import { defaults, emptyLedger } from '../domain/model'
-import { readBackup } from './transfer'
+import 'fake-indexeddb/auto'
+import { afterEach, expect, it, vi } from 'vitest'
+import { blankEntry, defaults, emptyLedger } from '../domain/model'
+import { apply, db, putMeta } from './db'
+import { encodeChanges } from './syncEngine'
+import { backup, readBackup } from './transfer'
+
+it('la clave de sincronización no entra en la cola ni en los cambios enviados', async () => {
+  await putMeta('syncKey', 'secreta-123')
+  await apply([{ collection: 'entries', item: blankEntry('2026-11-23', defaults) }])
+  const queue = await db.queue.toArray()
+  expect(queue.length).toBeGreaterThan(0)
+  expect(JSON.stringify(queue)).not.toContain('secreta-123')
+  expect(JSON.stringify(await encodeChanges(queue))).not.toContain('secreta-123')
+})
+
+afterEach(() => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})
+
+it('la clave de sincronización no sale en el backup', async () => {
+  await putMeta('syncKey', 'secreta-123')
+  const blobs: Blob[] = []
+  vi.stubGlobal('document', { createElement: () => ({ click: () => undefined }) })
+  vi.spyOn(URL, 'createObjectURL').mockImplementation((blob) => {
+    blobs.push(blob as Blob)
+    return 'blob:prueba'
+  })
+  vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => undefined)
+  await backup('2026-11-23', false)
+  await backup('2026-11-23', true)
+  expect(blobs).toHaveLength(2)
+  for (const blob of blobs) {
+    const text = await blob.text()
+    expect(JSON.parse(text)).toMatchObject({ version: 1 })
+    expect(text).not.toContain('secreta-123')
+  }
+})
 
 it('restaura un backup viejo sin tipo', () => {
   const old = {

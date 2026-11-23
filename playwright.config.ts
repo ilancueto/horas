@@ -37,8 +37,7 @@ export default defineConfig({
       url: 'http://127.0.0.1:47684',
       reuseExistingServer: false,
       env: {
-        VITE_SUPABASE_URL: 'https://horas-test.supabase.co',
-        VITE_SUPABASE_PUBLISHABLE_KEY: 'mock-publishable-key',
+        VITE_SYNC_URL: 'https://horas-test.workers.dev',
       },
     },
   ],

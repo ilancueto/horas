@@ -1,30 +1,7 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 
-const supabase = 'https://horas-test.supabase.co'
-const uid = '00100000-0000-4000-a000-000000000001'
-const user = {
-  id: uid,
-  aud: 'authenticated',
-  role: 'authenticated',
-  email: 'prueba@example.invalid',
-  app_metadata: {},
-  user_metadata: {},
-  created_at: '2026-01-01T00:00:00Z',
-}
-const encode = (value: object) => Buffer.from(JSON.stringify(value)).toString('base64url')
-const expires = Math.floor(Date.parse('2026-11-24T15:00:00Z') / 1000) + 3600
-const session = {
-  access_token:
-    encode({ alg: 'HS256', typ: 'JWT' }) +
-    '.' +
-    encode({ sub: uid, role: 'authenticated', exp: expires }) +
-    '.c2ln',
-  token_type: 'bearer',
-  expires_at: expires,
-  expires_in: 3600,
-  refresh_token: 'mock-refresh-token',
-  user,
-}
+const worker = 'https://horas-test.workers.dev'
+const secret = 'clave-de-prueba'
 type RecordPacket = {
   id: string
   collection: string
@@ -55,139 +32,114 @@ const period = (page: Page) =>
     .filter({ visible: true })
     .getByRole('button', { name: 'Período', exact: true })
     .click()
+const status = (page: Page, text: string) =>
+  page.getByText(text, { exact: true }).filter({ visible: true }).last()
+async function connect(page: Page, key: string) {
+  await page.getByLabel('Clave de sincronización').fill(key)
+  await page.getByRole('button', { name: 'Guardar y conectar' }).click()
+}
 
-test('fusiona y sincroniza dos perfiles de navegador con Supabase simulado', async ({
-  browser,
-}) => {
+/** Simula el Worker de Cloudflare: CORS, clave Bearer, lecturas paginadas y push con revisiones. */
+function createWorker() {
   const remote = new Map<string, Remote>()
   const revisions = new Set<string>()
-  const sockets = new Set<(packet: Remote) => void>()
   let version = 0
-  let tokenInstalled = false
+  let authorized = 0
+  let rejected = 0
+  let leaked = 0
   async function stub(context: BrowserContext) {
-    await context.addInitScript(
-      ({ key, session }) => {
-        if (localStorage.getItem('activate-mock-session'))
-          localStorage.setItem(key, JSON.stringify(session))
-      },
-      { key: 'sb-horas-test-auth-token', session },
-    )
-    await context.route(supabase + '/**', async (route) => {
+    // La clave solo puede viajar en el encabezado Authorization, nunca en una URL.
+    context.on('request', (req) => {
+      if (req.url().includes(secret) || req.url().includes('incorrecta')) leaked++
+    })
+    await context.route(worker + '/**', async (route) => {
       const req = route.request()
-      const path = new URL(req.url()).pathname
-      const headers = { 'access-control-allow-origin': '*', 'access-control-allow-headers': '*' }
+      const url = new URL(req.url())
+      const headers = {
+        'access-control-allow-origin': address,
+        'access-control-allow-methods': 'GET, POST, OPTIONS',
+        'access-control-allow-headers': 'authorization, content-type',
+        vary: 'Origin',
+      }
       if (req.method() === 'OPTIONS') {
         await route.fulfill({ status: 204, headers })
         return
       }
-      if (path.endsWith('/user')) {
-        await route.fulfill({ json: user, headers })
+      if ((await req.headerValue('authorization')) !== 'Bearer ' + secret) {
+        rejected++
+        await route.fulfill({ status: 401, headers, json: { error: 'Unauthorized' } })
         return
       }
-      if (path.endsWith('/horas_profiles')) {
-        await route.fulfill({ json: [], headers })
+      authorized++
+      if (req.method() === 'GET' && url.pathname === '/v1/profile') {
+        await route.fulfill({ json: { encryption: null }, headers })
         return
       }
-      if (path.endsWith('/records')) {
-        await route.fulfill({
-          json: [...remote.values()].sort((a, b) => a.id.localeCompare(b.id)),
-          headers,
-        })
+      if (req.method() === 'GET' && url.pathname === '/v1/records') {
+        const after = url.searchParams.get('after') ?? ''
+        const limit = Number(url.searchParams.get('limit') ?? 500)
+        const rows = [...remote.values()]
+          .sort((a, b) => a.id.localeCompare(b.id))
+          .filter((r) => r.id > after)
+          .slice(0, limit)
+        await route.fulfill({ json: { rows }, headers })
         return
       }
-      if (path.endsWith('/horas_push')) {
+      if (req.method() === 'POST' && url.pathname === '/v1/push') {
         const { changes } = req.postDataJSON() as { changes: RecordPacket[] }
         for (const change of changes) {
           if (revisions.has(change.revision)) continue
           revisions.add(change.revision)
-          const updated_at = new Date(Date.UTC(2026, 10, 24, 0, 0, ++version)).toISOString()
-          const row = {
+          const updated_at = new Date(Date.UTC(2026, 10, 24, 0, 0, ++version))
+            .toISOString()
+            .replace('Z', '000Z')
+          remote.set(change.id, {
             id: change.id,
             collection: change.collection,
             revision: change.revision,
-            data: change.data,
+            data: change.deleted ? null : change.data,
             updated_at,
             deleted_at: change.deleted ? updated_at : null,
-          }
-          remote.set(change.id, row)
-          for (const send of sockets) send(row)
+          })
         }
         await route.fulfill({ status: 204, headers })
         return
       }
-      await route.fulfill({ status: 404, headers, json: { message: 'Mock route unavailable' } })
-    })
-    await context.routeWebSocket(/wss:\/\/horas-test\.supabase\.co\//, (socket) => {
-      let subscribe: (packet: Remote) => void
-      socket.onMessage((raw) => {
-        const parsed = JSON.parse(String(raw))
-        if (!Array.isArray(parsed)) return
-        const [join, ref, topic, event, body] = parsed
-        if (event === 'phx_join') {
-          const specs = (body.config.postgres_changes as Record<string, string>[]).map(
-            (spec, id) => ({ ...spec, id: id + 1 }),
-          )
-          socket.send(
-            JSON.stringify([
-              join,
-              ref,
-              topic,
-              'phx_reply',
-              { status: 'ok', response: { postgres_changes: specs } },
-            ]),
-          )
-          subscribe = (packet) =>
-            socket.send(
-              JSON.stringify([
-                join,
-                null,
-                topic,
-                'postgres_changes',
-                {
-                  ids: [1],
-                  data: {
-                    schema: 'public',
-                    table: 'records',
-                    commit_timestamp: packet.updated_at,
-                    type: 'UPDATE',
-                    columns: [],
-                    record: packet,
-                    old_record: {},
-                    errors: null,
-                  },
-                },
-              ]),
-            )
-          sockets.add(subscribe)
-        } else if (event === 'heartbeat')
-          socket.send(
-            JSON.stringify([join, ref, topic, 'phx_reply', { status: 'ok', response: {} }]),
-          )
-      })
-      socket.onClose(() => sockets.delete(subscribe))
+      await route.fulfill({ status: 404, headers, json: { error: 'Not found' } })
     })
   }
+  return {
+    remote,
+    stub,
+    authorized: () => authorized,
+    rejected: () => rejected,
+    leaked: () => leaked,
+  }
+}
+
+test('sincroniza y fusiona dos perfiles de navegador con el Worker simulado', async ({
+  browser,
+}) => {
+  const server = createWorker()
   const first = await browser.newContext(),
     second = await browser.newContext()
   try {
-    await stub(first)
-    await stub(second)
+    await server.stub(first)
+    await server.stub(second)
     const a = await first.newPage(),
       b = await second.newPage()
     await onboard(a)
     await onboard(b)
     for (const p of [a, b]) {
-      await p.evaluate(() => localStorage.setItem('activate-mock-session', '1'))
-      await p.reload()
-      if (tokenInstalled) {
+      await more(p)
+      await expect(status(p, 'Solo local')).toBeVisible()
+      await connect(p, secret)
+      if (p === b) {
         await expect(p.getByRole('dialog', { name: 'Fusionar datos' })).toBeVisible()
         await p.getByRole('button', { name: 'Fusionar y sincronizar' }).click()
       }
-      await more(p)
-      await expect(
-        p.getByText('Sincronizado', { exact: true }).filter({ visible: true }).last(),
-      ).toBeVisible()
-      tokenInstalled = true
+      await expect(status(p, 'Sincronizado')).toBeVisible()
+      await expect(p.getByText('Conectado a horas-test.workers.dev')).toBeVisible()
     }
     await first.setOffline(true)
     await period(a)
@@ -197,20 +149,52 @@ test('fusiona y sincroniza dos perfiles de navegador con Supabase simulado', asy
     await expect(a.getByRole('region', { name: 'Totales del período' })).toContainText(
       '1 día trabajado',
     )
-    expect([...remote.values()].filter((r) => r.collection === 'entries')).toHaveLength(0)
+    expect([...server.remote.values()].filter((r) => r.collection === 'entries')).toHaveLength(0)
     await first.setOffline(false)
     await expect
-      .poll(() => [...remote.values()].filter((r) => r.collection === 'entries').length)
+      .poll(() => [...server.remote.values()].filter((r) => r.collection === 'entries').length)
       .toBe(1)
+    await b.getByRole('button', { name: 'Sincronizar ahora' }).click()
+    await expect(status(b, 'Sincronizado')).toBeVisible()
     await period(b)
     await expect(b.getByRole('region', { name: 'Totales del período' })).toContainText(
       '1 día trabajado',
-      {
-        timeout: 10000,
-      },
     )
+    expect(server.leaked()).toBe(0)
   } finally {
     await first.close()
     await second.close()
+  }
+})
+
+test('sincroniza: una clave incorrecta no se reintenta y se puede quitar', async ({ browser }) => {
+  const server = createWorker()
+  const context = await browser.newContext()
+  try {
+    await server.stub(context)
+    const page = await context.newPage()
+    await onboard(page)
+    await more(page)
+    await connect(page, '   ')
+    await expect(
+      page.getByRole('status').filter({ hasText: 'Escribí la clave de sincronización.' }),
+    ).toBeVisible()
+    expect(server.rejected() + server.authorized()).toBe(0)
+    await connect(page, 'incorrecta')
+    await expect(page.getByRole('alert')).toHaveText('La clave de sincronización no es válida.')
+    await expect(status(page, 'Error')).toBeVisible()
+    const attempts = server.rejected()
+    expect(attempts).toBeGreaterThan(0)
+    // Sin reintentos automáticos: el primer reintento con espera sería a 1 s.
+    await page.waitForTimeout(2500)
+    expect(server.rejected()).toBe(attempts)
+    expect(server.authorized()).toBe(0)
+    await page.getByRole('button', { name: 'Quitar clave' }).click()
+    await expect(status(page, 'Solo local')).toBeVisible()
+    await expect(page.getByLabel('Clave de sincronización')).toHaveValue('')
+    await expect(page.getByRole('alert')).toHaveCount(0)
+    expect(server.leaked()).toBe(0)
+  } finally {
+    await context.close()
   }
 })

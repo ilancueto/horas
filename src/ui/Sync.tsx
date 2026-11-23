@@ -1,10 +1,17 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { Session, SupabaseClient } from '@supabase/supabase-js'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Cloud, CloudOff, RefreshCw } from 'lucide-react'
 import { z } from 'zod'
 import { liveQuery } from 'dexie'
 import { db, getMeta, putMeta } from '../data/db'
-import { connectCloud, cloudConfigured, backend } from '../data/supabase'
+import {
+  CloudError,
+  cloudConfigured,
+  cloudHost as host,
+  cloudOrigin as owner,
+  cloudUrl,
+  createCloud,
+  linkedOwner,
+} from '../data/cloud'
 import { cycle, encodeChanges, retryDelay, stageInitial, type CloudRow } from '../data/syncEngine'
 import { createEncryption, unlockEncryption, type Encryption } from '../data/crypto'
 import { Dialog } from './base'
@@ -13,9 +20,13 @@ type Status =
   'Solo local' | 'Sincronizado' | 'Pendiente' | 'Sin conexión' | 'Error' | 'Nube bloqueada'
 type Merge = { local: number; remote: number; rows: CloudRow[] }
 
+const invalidKey = 'La clave de sincronización no es válida.'
+const isInvalidKey = (error: unknown) => error instanceof CloudError && error.status === 401
+
 export function useSync(enabled: boolean) {
-  const [client, setClient] = useState<SupabaseClient | null>(null)
-  const [session, setSession] = useState<Session | null>(null)
+  // La clave vive solo en el meta local del dispositivo: nunca en backups, sync, URLs ni logs.
+  // Cada guardado crea un objeto nuevo, así una clave rechazada se puede reintentar al guardarla.
+  const [credential, setCredential] = useState<{ key: string } | null>(null)
   const [status, setStatus] = useState<Status>('Solo local')
   const [merge, setMerge] = useState<Merge | null>(null)
   const [encryption, setEncryption] = useState<Encryption | null>(null)
@@ -24,47 +35,54 @@ export function useSync(enabled: boolean) {
   const secret = useRef<{ config: Encryption; key: CryptoKey } | null>(null)
   const perform = useRef<() => Promise<void>>(async () => undefined)
   const confirm = useRef<() => Promise<void>>(async () => undefined)
+  const api = useMemo(
+    () => (cloudUrl && credential ? createCloud(cloudUrl, credential.key) : null),
+    [credential],
+  )
 
   useEffect(() => {
     let live = true
-    void connectCloud()
-      .then((result) => {
-        if (live) setClient(result)
-      })
-      .catch(() => {
-        if (live) setIssue('Revisá la URL y la clave pública de Supabase.')
-      })
+    void getMeta('syncKey', z.string().nullable(), null).then((key) => {
+      if (live && key) setCredential((current) => current ?? { key })
+    })
     return () => {
       live = false
     }
   }, [])
   useEffect(() => {
-    if (!client) return
-    const { data } = client.auth.onAuthStateChange((_event, next) => {
-      setSession((previous) => (previous?.user.id === next?.user.id ? previous : next))
-    })
-    return () => data.subscription.unsubscribe()
-  }, [client])
-  useEffect(() => {
-    if (!session) secret.current = null
-    if (!enabled || !session || !client) {
+    if (!api) {
+      secret.current = null
+      setEncryption(null)
+    }
+    if (!enabled || !api) {
       setStatus('Solo local')
       setMerge(null)
       return
     }
-    const api = backend(session, client)
+    const cloud = api
     let alive = true
     let running = false
     let again = false
     let failures = 0
+    let blocked = false
     let timer: ReturnType<typeof setTimeout> | undefined
-    const user = session.user.id
     const schedule = (delay = 120) => {
       clearTimeout(timer)
       timer = setTimeout(() => void run(), delay)
     }
-    async function run() {
+    const reject = () => {
+      // Clave rechazada: sin reintentos automáticos hasta que se guarde otra.
+      blocked = true
+      again = false
+      clearTimeout(timer)
+      setMerge(null)
+      setStatus('Error')
+      setIssue(invalidKey)
+    }
+    async function run(manual = false) {
       if (!alive) return
+      if (manual) blocked = false
+      if (blocked) return
       if (running || busy.current) {
         again = true
         return
@@ -75,16 +93,15 @@ export function useSync(enabled: boolean) {
       }
       running = true
       try {
-        const owner = await getMeta('syncOwner', z.string(), '')
+        // Sin id de usuario, los datos locales quedan vinculados al origen del servidor.
+        const linked = linkedOwner(await getMeta('syncOwner', z.unknown(), ''))
         if (!alive) return
-        if (owner && owner !== user) {
-          setIssue(
-            'Estos datos locales están vinculados a otra cuenta. Abrí esta cuenta en otro perfil del navegador.',
-          )
+        if (linked && linked !== owner) {
+          setIssue('Estos datos locales están vinculados a otro servidor de sincronización.')
           setStatus('Error')
           return
         }
-        const config = await api.encryption()
+        const config = await cloud.encryption()
         if (!alive) return
         setEncryption(config)
         if (config && secret.current?.config.salt !== config.salt) {
@@ -92,8 +109,8 @@ export function useSync(enabled: boolean) {
           return
         }
         const key = config ? secret.current?.key : undefined
-        if (!owner) {
-          const remote = await api.pull()
+        if (!linked) {
+          const remote = await cloud.pull()
           const local = (await db.records.toArray()).filter(
             (r) =>
               !r.deleted &&
@@ -107,58 +124,56 @@ export function useSync(enabled: boolean) {
             return
           }
           await stageInitial(remote)
-          await putMeta('syncOwner', user)
+          await putMeta('syncOwner', owner)
         }
         if (!alive) return
         setMerge(null)
         setIssue('')
         setStatus('Pendiente')
-        await cycle(api, key, () => alive)
+        await cycle(cloud, key, () => alive)
         if (!alive) return
         failures = 0
         const pending = await db.queue.count()
         setStatus(pending ? 'Pendiente' : 'Sincronizado')
         if (pending) again = true
-      } catch {
+      } catch (error) {
         if (!alive) return
+        if (isInvalidKey(error)) {
+          reject()
+          return
+        }
         setStatus('Error')
         setIssue('No se pudo sincronizar. Tus cambios siguen guardados en este dispositivo.')
         failures++
         schedule(retryDelay(failures))
       } finally {
         running = false
-        if (again && alive && !failures) {
+        if (again && alive && !failures && !blocked) {
           again = false
           schedule()
         }
       }
     }
-    perform.current = run
+    perform.current = () => run(true)
     confirm.current = async () => {
       if (!alive) return
-      const remote = await api.pull()
-      await stageInitial(remote)
-      await putMeta('syncOwner', user)
-      await run()
+      try {
+        const remote = await cloud.pull()
+        await stageInitial(remote)
+        await putMeta('syncOwner', owner)
+      } catch (error) {
+        if (!alive) return
+        if (isInvalidKey(error)) {
+          reject()
+          return
+        }
+        throw error
+      }
+      await run(true)
     }
     const connection = () => schedule()
     addEventListener('online', connection)
     addEventListener('offline', connection)
-    const realtime = client
-      .channel('horas-' + user)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'records', filter: 'user_id=eq.' + user },
-        connection,
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'horas_profiles', filter: 'user_id=eq.' + user },
-        connection,
-      )
-      .subscribe((s) => {
-        if (s === 'SUBSCRIBED') schedule()
-      })
     let fingerprint = ''
     const subscription = liveQuery(() => db.queue.toArray()).subscribe((rows) => {
       const next = rows
@@ -179,11 +194,10 @@ export function useSync(enabled: boolean) {
       removeEventListener('online', connection)
       removeEventListener('offline', connection)
       subscription.unsubscribe()
-      void client?.removeChannel(realtime)
       perform.current = async () => undefined
       confirm.current = async () => undefined
     }
-  }, [client, enabled, session])
+  }, [api, enabled])
   const syncNow = useCallback(() => perform.current(), [])
   async function agree() {
     await confirm.current().catch(() => {
@@ -191,9 +205,21 @@ export function useSync(enabled: boolean) {
       setIssue('No se pudo confirmar la fusión. Probá de nuevo.')
     })
   }
+  async function saveKey(value: string) {
+    const key = value.trim()
+    if (!key) throw new Error('Escribí la clave de sincronización.')
+    await putMeta('syncKey', key)
+    setIssue('')
+    setCredential({ key })
+  }
+  async function removeKey() {
+    await putMeta('syncKey', null)
+    secret.current = null
+    setIssue('')
+    setCredential(null)
+  }
   async function changeEncryption(phrase: string) {
-    if (!session || !enabled || !client) return
-    const api = backend(session, client)
+    if (!api || !enabled) return
     if (encryption) {
       const key = await unlockEncryption(phrase, encryption)
       secret.current = { config: encryption, key }
@@ -227,8 +253,6 @@ export function useSync(enabled: boolean) {
     }
   }
   return {
-    client,
-    session,
     status,
     merge,
     encryption,
@@ -237,12 +261,15 @@ export function useSync(enabled: boolean) {
     syncNow,
     changeEncryption,
     canSend: cloudConfigured,
+    hasKey: Boolean(credential),
+    saveKey,
+    removeKey,
   }
 }
 export type SyncState = ReturnType<typeof useSync>
 
 export function SyncPanel({ sync }: { sync: SyncState }) {
-  const [email, setEmail] = useState('')
+  const [key, setKey] = useState('')
   const [phrase, setPhrase] = useState('')
   const [repeat, setRepeat] = useState('')
   const [message, setMessage] = useState('')
@@ -268,56 +295,53 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
       </div>
       {!sync.canSend ? (
         <p className="muted">
-          Tus datos se guardan en este dispositivo. Podés habilitar la nube al configurar Supabase.
+          Tus datos se guardan en este dispositivo. Podés habilitar la nube al configurar el Worker
+          de Cloudflare.
         </p>
-      ) : !sync.session ? (
+      ) : !sync.hasKey ? (
         <form
           className="stack"
           onSubmit={(e) => {
             e.preventDefault()
+            if (!key.trim()) {
+              setMessage('Escribí la clave de sincronización.')
+              return
+            }
             void action(async () => {
-              const { error } = await sync.client!.auth.signInWithOtp({
-                email,
-                options: { emailRedirectTo: location.origin + location.pathname },
-              })
-              if (error) throw error
-              setMessage('Revisá tu correo y abrí el enlace en este dispositivo.')
-            }, 'No pudimos enviar el enlace. Revisá el correo o probá en unos minutos.')
+              await sync.saveKey(key)
+              setKey('')
+            }, 'No se pudo guardar la clave. Probá de nuevo.')
           }}
         >
           <label>
-            Correo electrónico
+            Clave de sincronización
             <input
-              type="email"
-              autoComplete="email"
+              type="password"
+              autoComplete="off"
+              spellCheck={false}
               required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              value={key}
+              onChange={(e) => setKey(e.target.value)}
             />
           </label>
           <div className="actions">
-            <button className="primary" disabled={busy || !sync.client}>
-              Enviar link de acceso
+            <button className="primary" disabled={busy}>
+              Guardar y conectar
             </button>
           </div>
         </form>
       ) : (
         <>
-          <p className="muted">{sync.session.user.email}</p>
+          <p className="muted">Conectado a {host}</p>
           <div className="actions">
             <button disabled={busy} onClick={() => void sync.syncNow()}>
               <RefreshCw size={16} /> Sincronizar ahora
             </button>
             <button
               disabled={busy}
-              onClick={() =>
-                void action(async () => {
-                  const { error } = await sync.client!.auth.signOut({ scope: 'local' })
-                  if (error) throw error
-                }, 'No se pudo cerrar la sesión.')
-              }
+              onClick={() => void action(sync.removeKey, 'No se pudo quitar la clave.')}
             >
-              Cerrar sesión
+              Quitar clave
             </button>
           </div>
           {sync.issue && (
@@ -386,7 +410,7 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
           )}
         </>
       )}
-      {!sync.session && sync.issue && (
+      {sync.canSend && !sync.hasKey && sync.issue && (
         <p className="warning" role="alert">
           {sync.issue}
         </p>
