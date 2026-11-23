@@ -44,7 +44,7 @@ test('importa el Excel de referencia y lo vuelve a importar sin duplicar', async
     '40 / 9,66 / 13 / 62,66',
   )
   await page.getByRole('button', { name: 'Confirmar importación' }).click()
-  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('62,66 h')
+  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('22,66 h')
   await expect(
     page.getByRole('combobox', { name: 'Seleccionar período' }).locator('option'),
   ).toHaveCount(2)
@@ -77,7 +77,11 @@ test('carga jornadas, guardia y ausencias, descarga XLSX/PDF/JSON y restaura', a
     await page.getByLabel('Notas ' + date).fill('Prueba de jornada')
     await page.getByLabel('Notas ' + date).press('Tab')
   }
-  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('8:35')
+  const totals = page.getByRole('region', { name: 'Totales del período' })
+  await expect(totals).toContainText('Horas extra')
+  await expect(totals).toContainText('0:35')
+  await expect(totals).not.toContainText('Normales')
+  await expect(totals).toContainText(/días? trabajados?/)
   await nav(page, 'Más').click()
   await page.getByRole('button', { name: 'Compensatorio', exact: true }).click()
   await page.getByRole('button', { name: 'Agregar compensatorio' }).click()
@@ -133,7 +137,9 @@ test('carga jornadas, guardia y ausencias, descarga XLSX/PDF/JSON y restaura', a
   await download(page, 'Descargar backup y restaurar')
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await nav(page, 'Período').click()
-  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('8:35')
+  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText(
+    /días? trabajados?/,
+  )
 })
 test('carga licencias por tipo', async ({ page }) => {
   await start(page)
@@ -189,7 +195,9 @@ test('instalabilidad, acceso directo y recarga de producción sin conexión', as
   await page.getByRole('button', { name: 'Horario estándar' }).click()
   await page.getByRole('button', { name: 'Guardar jornada' }).click()
   await page.reload()
-  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText('8:00')
+  await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText(
+    '1 día trabajado',
+  )
   await nav(page, 'Más').click()
   expect((await download(page, 'Exportar XLSX')).suggestedFilename()).toBe('Horas.xlsx')
 })

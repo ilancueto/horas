@@ -643,7 +643,7 @@ small,
   animation: stamp 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
 }
 .split-tile {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 18px;
 }
 .split-tile div {
@@ -666,10 +666,10 @@ small,
 .split-tile div > .double {
   border-top-color: var(--red-ink);
 }
-.split-tile div:nth-child(2) strong {
+.split-tile div:nth-child(1) strong {
   color: var(--amber-ink);
 }
-.split-tile div:nth-child(3) strong {
+.split-tile div:nth-child(2) strong {
   color: var(--red-ink);
 }
 .split-tile strong {

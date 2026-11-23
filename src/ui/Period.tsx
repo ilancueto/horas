@@ -245,13 +245,13 @@ export function PeriodView({
       <section className="overview overview-period" aria-label="Totales del período">
         <div className="tile total-tile">
           <span>
-            <Clock3 size={17} /> Horas registradas
+            <Clock3 size={17} /> Horas extra
           </span>
           <strong>
             <Hours
               roll
-              value={totals.total}
-              decimalValue={reported.total}
+              value={totals.extra + totals.double}
+              decimalValue={reported.extra + reported.double}
               format={settings.format}
             />
           </strong>
@@ -262,7 +262,6 @@ export function PeriodView({
         <div className="tile split-tile">
           {(
             [
-              ['Normales', 'normal'],
               ['Al 50%', 'extra'],
               ['Al 100%', 'double'],
             ] as const
