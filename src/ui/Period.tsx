@@ -405,10 +405,15 @@ export function PeriodView({
                 </thead>
                 <tbody>
                   {filtered.map((row) => (
-                    <tr key={row.date} className={row.tone}>
+                    <tr
+                      key={row.date}
+                      className={row.tone}
+                      aria-current={row.date === today ? 'date' : undefined}
+                    >
                       <th scope="row">
                         <button className="date-link" onClick={() => openDay(row.date)}>
                           {fmtDate(row.date, { day: '2-digit', month: '2-digit' })}
+                          {row.date === today && <span className="badge today-badge">Hoy</span>}
                         </button>
                       </th>
                       <td>
@@ -490,10 +495,15 @@ export function PeriodView({
             </div>
             <div className="day-cards">
               {filtered.map((row) => (
-                <article className={'day-card ' + row.tone} key={row.date}>
+                <article
+                  className={'day-card ' + row.tone}
+                  key={row.date}
+                  aria-current={row.date === today ? 'date' : undefined}
+                >
                   <div>
                     <strong>
                       {fmtDate(row.date, { weekday: 'long', day: 'numeric', month: 'short' })}
+                      {row.date === today && <span className="badge today-badge">Hoy</span>}
                     </strong>
                     <DayBadge row={row} />
                     <small>
