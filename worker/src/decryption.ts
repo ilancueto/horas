@@ -1,17 +1,27 @@
 import { z } from 'zod'
-import { encryptionSchema, unlockEncryption, unseal } from '../../src/data/crypto'
+import {
+  encryptionSchema,
+  importMigrationKey,
+  InvalidEncryptionKey,
+  unseal,
+} from '../../src/data/crypto'
 import { empty, json } from './http'
 import type { Env } from './index'
 import { byteLength, MAX_RECORD } from './push'
 
-const requestSchema = z.object({ phrase: z.string().min(1).max(4096) })
+const requestSchema = z.object({
+  decryptionKey: z
+    .string()
+    .length(44)
+    .regex(/^[A-Za-z0-9+/]{43}=$/),
+})
 const recordSchema = z.looseObject({ id: z.string() })
 
 type EncryptedRecord = { id: string; collection: string; revision: string; data: string }
 
 export async function disableEncryption(env: Env, body: unknown): Promise<Response> {
   const request = requestSchema.safeParse(body)
-  if (!request.success) return json({ error: 'Invalid phrase' }, 400)
+  if (!request.success) return json({ error: 'Invalid decryption key' }, 400)
 
   const profile = await env.DB.prepare('select encryption from profile where id = 1').first<{
     encryption: string | null
@@ -21,9 +31,11 @@ export async function disableEncryption(env: Env, body: unknown): Promise<Respon
   const config = encryptionSchema.parse(JSON.parse(profile.encryption))
   let key: CryptoKey
   try {
-    key = await unlockEncryption(request.data.phrase, config)
-  } catch {
-    return json({ error: 'Invalid phrase' }, 422)
+    key = await importMigrationKey(request.data.decryptionKey, config)
+  } catch (error) {
+    if (!(error instanceof InvalidEncryptionKey))
+      return json({ error: 'Could not verify key' }, 500)
+    return json({ error: 'Invalid decryption key' }, 422)
   }
 
   const { results } = await env.DB.prepare(

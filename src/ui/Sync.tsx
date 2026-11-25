@@ -20,7 +20,12 @@ import {
   linkedOwner,
 } from '../data/cloud'
 import { cycle, retryDelay, stageInitial, type CloudRow } from '../data/syncEngine'
-import { unlockEncryption, type Encryption } from '../data/crypto'
+import {
+  exportMigrationKey,
+  InvalidEncryptionKey,
+  unlockEncryption,
+  type Encryption,
+} from '../data/crypto'
 import { Dialog } from './base'
 
 type Status =
@@ -475,9 +480,10 @@ export function useSync(enabled: boolean) {
   }, [enabled, loaded, credential, linkOpened])
   async function disableEncryption(phrase: string) {
     if (!api || !enabled || !encryption) return
+    const decryptionKey = await exportMigrationKey(phrase, encryption)
     busy.current = true
     try {
-      await api.disableEncryption(phrase)
+      await api.disableEncryption(decryptionKey)
       secret.current = null
       setEncryption(null)
     } finally {
@@ -602,7 +608,7 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
                     await sync.disableEncryption(currentPhrase)
                     setMessage('Se desactivó el cifrado de la nube.')
                   } catch (error) {
-                    if (error instanceof CloudError && error.status === 422) {
+                    if (error instanceof InvalidEncryptionKey) {
                       setMessage('La frase no coincide. Probá de nuevo.')
                       return
                     }
