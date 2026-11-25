@@ -1,5 +1,12 @@
 import { expect, test, type BrowserContext, type Page } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
+import {
+  createEncryption,
+  seal,
+  unlockEncryption,
+  unseal,
+  type Encryption,
+} from '../src/data/crypto'
 
 const worker = 'https://horas-test.workers.dev'
 const secret = 'clave-de-prueba'
@@ -43,7 +50,7 @@ async function connect(page: Page, key: string) {
 
 /**
  * Simula el Worker de Cloudflare: CORS, clave Bearer, lecturas paginadas, push con revisiones y
- * activación del cifrado (mismo contrato que `worker/src/encryption.ts`).
+ * conversión de la nube cifrada (mismo contrato que el Worker).
  */
 function createWorker() {
   const remote = new Map<string, Remote>()
@@ -54,7 +61,7 @@ function createWorker() {
   let leaked = 0
   let pushes = 0
   let profiles = 0
-  let encryption: unknown = null
+  let encryption: Encryption | null = null
   // Mientras hay una retención, las respuestas autorizadas esperan (para probar concurrencia).
   let gate: Promise<void> | null = null
   const stamp = () =>
@@ -97,27 +104,26 @@ function createWorker() {
         await route.fulfill({ json: { encryption }, headers })
         return
       }
-      if (req.method() === 'POST' && url.pathname === '/v1/encryption') {
-        const body = req.postDataJSON() as {
-          config: unknown
-          changes: { id: string; revision: string; data: unknown }[]
+      if (req.method() === 'POST' && url.pathname === '/v1/decryption') {
+        if (encryption) {
+          let key: CryptoKey
+          try {
+            key = await unlockEncryption(req.postDataJSON().phrase, encryption)
+          } catch {
+            await route.fulfill({ status: 422, headers })
+            return
+          }
+          for (const [id, row] of remote) {
+            if (row.deleted_at) continue
+            const data = await unseal(
+              key,
+              row.data,
+              [row.collection, row.id, row.revision].join('|'),
+            )
+            remote.set(id, { ...row, data })
+          }
+          encryption = null
         }
-        const live = [...remote.values()].filter((r) => !r.deleted_at)
-        if (
-          encryption !== null ||
-          live.length !== body.changes.length ||
-          body.changes.some((c) => remote.get(c.id)?.revision !== c.revision)
-        ) {
-          await route.fulfill({ status: 409, headers, json: { error: 'Records changed' } })
-          return
-        }
-        for (const change of body.changes)
-          remote.set(change.id, {
-            ...remote.get(change.id)!,
-            data: change.data,
-            updated_at: stamp(),
-          })
-        encryption = body.config
         await route.fulfill({ status: 204, headers })
         return
       }
@@ -162,6 +168,15 @@ function createWorker() {
     pushes: () => pushes,
     profiles: () => profiles,
     encrypted: () => encryption !== null,
+    async seedEncryption(phrase: string) {
+      const { key, config } = await createEncryption(phrase)
+      for (const [id, row] of remote) {
+        if (row.deleted_at) continue
+        const data = await seal(key, row.data, [row.collection, row.id, row.revision].join('|'))
+        remote.set(id, { ...row, data })
+      }
+      encryption = config
+    },
     hold,
   }
 }
@@ -622,12 +637,10 @@ test('vincula: con la nube cifrada pide la frase de paso antes de entrar', async
     for (const context of [first, second, third]) await server.stub(context)
     const a = await first.newPage()
     await seedCloud(a, server)
+    await server.seedEncryption(phrase)
+    await a.reload()
     await more(a)
-    await a.getByLabel('Frase de paso', { exact: true }).fill(phrase)
-    await a.getByLabel('Repetir frase de paso').fill(phrase)
-    await a.getByRole('button', { name: 'Activar cifrado' }).click()
-    await expect(a.getByText('Cifrado activo para los registros en la nube.')).toBeVisible()
-    expect(server.encrypted()).toBe(true)
+    await expect(status(a, 'Nube bloqueada')).toBeVisible()
     const pushes = server.pushes()
 
     // Bienvenida: la clave abre el paso de la frase de paso sin marcar nada.
@@ -687,6 +700,23 @@ test('vincula: con la nube cifrada pide la frase de paso antes de entrar', async
       await expect(c.getByRole('button', { name })).toBeEnabled()
     expect(server.pushes()).toBe(pushes)
     expect(server.leaked()).toBe(0)
+
+    await a.getByLabel('Frase de paso', { exact: true }).fill('otra frase que no es')
+    await a.getByRole('button', { name: 'Desactivar cifrado' }).click()
+    await expect(a.getByText('La frase no coincide. Probá de nuevo.')).toBeVisible()
+    expect(server.encrypted()).toBe(true)
+    await a.getByLabel('Frase de paso', { exact: true }).fill(phrase)
+    await a.getByRole('button', { name: 'Desactivar cifrado' }).click()
+    await expect(status(a, 'Sincronizado')).toBeVisible()
+    expect(server.encrypted()).toBe(false)
+    await a.reload()
+    await more(a)
+    await expect(status(a, 'Sincronizado')).toBeVisible()
+    await expect(a.getByLabel('Frase de paso', { exact: true })).toHaveCount(0)
+    await period(a)
+    await expect(a.getByRole('region', { name: 'Totales del período' })).toContainText(
+      '1 día trabajado',
+    )
   } finally {
     await first.close()
     await second.close()

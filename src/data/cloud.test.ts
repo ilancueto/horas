@@ -168,13 +168,13 @@ describe('createCloud', () => {
     expect(fetcher.mock.calls[0]![0]).toBe('https://w.test/v1/records?limit=500')
   })
 
-  it('enable envía { config, changes } por POST /v1/encryption', async () => {
+  it('disableEncryption envía la frase por POST /v1/decryption', async () => {
     const fetcher = vi.fn().mockImplementation(() => reply(null, 204))
-    await createCloud('https://w.test', KEY, fetcher).enable(encryption, changes)
+    await createCloud('https://w.test', KEY, fetcher).disableEncryption('frase de prueba')
     const [url, init] = fetcher.mock.calls[0]!
-    expect(url).toBe('https://w.test/v1/encryption')
+    expect(url).toBe('https://w.test/v1/decryption')
     expect(init.method).toBe('POST')
-    expect(JSON.parse(init.body)).toEqual({ config: encryption, changes })
+    expect(JSON.parse(init.body)).toEqual({ phrase: 'frase de prueba' })
   })
 })
 

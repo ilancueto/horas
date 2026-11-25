@@ -1,9 +1,15 @@
 import { authorized } from './auth'
+import { disableEncryption } from './decryption'
 import { enableEncryption } from './encryption'
 import { empty, json } from './http'
 import { push } from './push'
 
-export type Env = { DB: D1Database; SYNC_KEY: string; ALLOWED_ORIGIN?: string }
+export type Env = {
+  DB: D1Database
+  SYNC_KEY: string
+  ALLOWED_ORIGIN?: string
+  DISABLE_ENCRYPTION_ACTIVATION?: string
+}
 
 type Route = (request: Request, env: Env, url: URL) => Promise<Response>
 
@@ -65,7 +71,12 @@ const routes: Record<string, Route> = {
   'GET /v1/records': readRecords,
   'GET /v1/profile': readProfile,
   'POST /v1/push': withBody(push),
-  'POST /v1/encryption': withBody(enableEncryption),
+  'POST /v1/encryption': withBody((env, body, now) =>
+    env.DISABLE_ENCRYPTION_ACTIVATION === 'true'
+      ? Promise.resolve(json({ error: 'Encryption activation disabled' }, 410))
+      : enableEncryption(env, body, now),
+  ),
+  'POST /v1/decryption': withBody(disableEncryption),
 }
 
 function allowedOrigin(request: Request, env: Env): string | null {
