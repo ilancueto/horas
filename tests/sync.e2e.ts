@@ -3,7 +3,7 @@ import AxeBuilder from '@axe-core/playwright'
 import {
   createEncryption,
   seal,
-  unlockEncryption,
+  importMigrationKey,
   unseal,
   type Encryption,
 } from '../src/data/crypto'
@@ -108,7 +108,7 @@ function createWorker() {
         if (encryption) {
           let key: CryptoKey
           try {
-            key = await unlockEncryption(req.postDataJSON().phrase, encryption)
+            key = await importMigrationKey(req.postDataJSON().decryptionKey, encryption)
           } catch {
             await route.fulfill({ status: 422, headers })
             return

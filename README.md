@@ -60,7 +60,7 @@ La sincronización es opcional. Sin configurar nada, la app queda en **Solo loca
    - Ojo: aunque la app borra el enlace de la barra, puede quedar en el historial del navegador (la visita ya se registró al abrirlo) y en el historial del portapapeles si lo copiaste. Borralo a mano: en Chrome, **Historial** (Ctrl+H), buscá la dirección de Horas y eliminá esa entrada; en el celular, lo mismo desde **Historial** del navegador. En Windows, el historial del portapapeles se abre con Win+V (**Borrar todo** o el menú `…` de esa entrada); en el celular, revisá el portapapeles del teclado.
    - Si compartiste el enlace o la clave por error, cambiá la clave del Worker con `npx wrangler secret put SYNC_KEY --config worker/wrangler.toml` y volvé a conectar cada dispositivo con la clave nueva (**Quitar clave** y **Guardar y conectar**, o un enlace nuevo).
 4. Si dos dispositivos ya tienen datos, el segundo que se conecta ofrece **Fusionar datos** para no perder ni duplicar nada.
-5. Si ya habías cifrado los registros de la nube, abrí **Más → Sincronización**, ingresá la frase actual y tocá **Desactivar cifrado**. El Worker verifica la frase una vez y convierte todos los registros juntos. Luego la sincronización usa la clave de sincronización.
+5. Si ya habías cifrado los registros de la nube, abrí **Más → Sincronización**, ingresá la frase actual y tocá **Desactivar cifrado**. El navegador verifica la frase y el Worker convierte todos los registros juntos. Luego la sincronización usa la clave de sincronización.
 
 No hay tiempo real: la app consulta la nube cada 45 segundos, cuando cambian los datos y cuando vuelve la conexión.
 

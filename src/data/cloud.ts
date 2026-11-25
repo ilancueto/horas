@@ -61,7 +61,7 @@ export function createCloud(
   fetcher: typeof fetch = (...args) => fetch(...args),
 ): Backend & {
   encryption: () => Promise<Encryption | null>
-  disableEncryption: (phrase: string) => Promise<void>
+  disableEncryption: (decryptionKey: string) => Promise<void>
 } {
   const base = trimSlash(baseUrl)
   // La clave viaja solo en el encabezado Authorization; nunca en URLs ni en logs.
@@ -105,6 +105,6 @@ export function createCloud(
     async encryption() {
       return profileSchema.parse(await get('/v1/profile')).encryption
     },
-    disableEncryption: (phrase) => post('/v1/decryption', { phrase }),
+    disableEncryption: (decryptionKey) => post('/v1/decryption', { decryptionKey }),
   }
 }

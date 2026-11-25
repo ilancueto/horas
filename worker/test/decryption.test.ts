@@ -1,5 +1,5 @@
 import { expect, it } from 'vitest'
-import { createEncryption, seal } from '../../src/data/crypto'
+import { createEncryption, exportMigrationKey, seal } from '../../src/data/crypto'
 import { setup } from './helpers'
 
 const phrase = 'frase de paso de prueba'
@@ -33,12 +33,14 @@ it('retira el cifrado con la frase correcta y conserva las revisiones y los borr
   })
   expect(pushed.status).toBe(204)
 
+  const decryptionKey = await exportMigrationKey(phrase, config)
+  const wrongKey = Buffer.alloc(32).toString('base64')
   const before = await (await call('GET', '/v1/records')).json()
-  expect(
-    (await call('POST', '/v1/decryption', { body: { phrase: 'frase incorrecta' } })).status,
-  ).toBe(422)
+  expect((await call('POST', '/v1/decryption', { body: { decryptionKey: wrongKey } })).status).toBe(
+    422,
+  )
   expect(await (await call('GET', '/v1/records')).json()).toEqual(before)
-  expect((await call('POST', '/v1/decryption', { body: { phrase } })).status).toBe(204)
+  expect((await call('POST', '/v1/decryption', { body: { decryptionKey } })).status).toBe(204)
   expect(await (await call('GET', '/v1/profile')).json()).toEqual({ encryption: null })
   expect(await (await call('GET', '/v1/records')).json()).toEqual({
     rows: [
@@ -51,5 +53,5 @@ it('retira el cifrado con la frase correcta y conserva las revisiones y los borr
       }),
     ],
   })
-  expect((await call('POST', '/v1/decryption', { body: { phrase } })).status).toBe(204)
+  expect((await call('POST', '/v1/decryption', { body: { decryptionKey } })).status).toBe(204)
 })
