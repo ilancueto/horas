@@ -458,7 +458,7 @@ small,
 .workspace {
   display: block;
 }
-.mobile-sync {
+.topbar .mobile-sync {
   display: none;
 }
 .bottom-nav,

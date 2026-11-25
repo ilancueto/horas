@@ -210,6 +210,9 @@ test('sincroniza y fusiona dos perfiles de navegador con el Worker simulado', as
         await p.getByRole('button', { name: 'Fusionar y sincronizar' }).click()
       }
       await expect(status(p, 'Sincronizado')).toBeVisible()
+      await expect(
+        p.locator('.topbar').getByText('Sincronizado', { exact: true }).filter({ visible: true }),
+      ).toHaveCount(1)
       await expect(p.getByText('Conectado a horas-test.workers.dev')).toBeVisible()
     }
     await first.setOffline(true)
