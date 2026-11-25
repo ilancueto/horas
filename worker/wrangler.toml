@@ -5,6 +5,7 @@ workers_dev = true
 preview_urls = false
 
 [vars]
+DISABLE_ENCRYPTION_ACTIVATION = "true"
 # Lista separada por comas. En desarrollo se agregan http://127.0.0.1:5180 y http://localhost:5173.
 ALLOWED_ORIGIN = "https://ilancueto.github.io"
 

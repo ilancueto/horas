@@ -42,6 +42,13 @@ test('al abrir lleva a la jornada actual y la marca como Hoy', async ({ page }) 
   await expect(currentDay.getByText('Hoy', { exact: true })).toBeVisible()
   await expect(currentDay).toBeInViewport({ ratio: 1 })
   await expect(page.getByRole('dialog')).toHaveCount(0)
+
+  // Chrome puede restaurar la página desde su caché de navegación.
+  await page.evaluate(() => {
+    window.scrollTo(0, 0)
+    window.dispatchEvent(new PageTransitionEvent('pageshow', { persisted: true }))
+  })
+  await expect(currentDay).toBeInViewport({ ratio: 1 })
 })
 test('importa el Excel de referencia y lo vuelve a importar sin duplicar', async ({ page }) => {
   test.skip(!existsSync(workbook), 'La planilla original se guarda fuera de Git.')
@@ -316,6 +323,7 @@ test('instalabilidad, acceso directo y recarga de producción sin conexión', as
   await expect(page.getByRole('dialog')).toBeVisible()
   await page.getByRole('button', { name: 'Horario estándar' }).click()
   await page.getByRole('button', { name: 'Guardar jornada' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
   await page.reload()
   await expect(page.getByRole('region', { name: 'Totales del período' })).toContainText(
     '1 día trabajado',

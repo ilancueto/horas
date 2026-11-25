@@ -141,14 +141,24 @@ export function App() {
       setDay(requestedDay)
   }
   useEffect(() => {
-    if (!initialScroll.current || !ready || error || !pinReady || (pin && !unlocked)) return
-    initialScroll.current = false
-    if (shortcutRequested) return
-
-    const currentDay = Array.from(
-      workspace.current?.querySelectorAll('[aria-current="date"]') ?? [],
-    ).find((element) => element.getClientRects().length > 0)
-    currentDay?.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })
+    if (!ready || error || !pinReady || (pin && !unlocked)) return
+    const scrollToToday = () => {
+      const currentDay = Array.from(
+        workspace.current?.querySelectorAll('.register [aria-current="date"]') ?? [],
+      ).find((element) => element.getClientRects().length > 0)
+      currentDay?.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })
+    }
+    if (initialScroll.current) {
+      initialScroll.current = false
+      if (!shortcutRequested) scrollToToday()
+    }
+    const restoreToday = (event: PageTransitionEvent) => {
+      if (!event.persisted) return
+      flushSync(() => setNow(today()))
+      scrollToToday()
+    }
+    window.addEventListener('pageshow', restoreToday)
+    return () => window.removeEventListener('pageshow', restoreToday)
   }, [ready, error, pinReady, pin, unlocked, shortcutRequested])
   useEffect(() => {
     if (ready && pinReady && (!pin || unlocked) && shortcutRequested) {

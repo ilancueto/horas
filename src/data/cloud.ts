@@ -1,6 +1,6 @@
 import { z } from 'zod'
 import { encryptionSchema, type Encryption } from './crypto'
-import { cloudRowSchema, type Backend, type ChangePacket } from './syncEngine'
+import { cloudRowSchema, type Backend } from './syncEngine'
 
 const trimSlash = (value: string) => value.replace(/\/+$/, '')
 const httpUrl = (value: string) => {
@@ -61,7 +61,7 @@ export function createCloud(
   fetcher: typeof fetch = (...args) => fetch(...args),
 ): Backend & {
   encryption: () => Promise<Encryption | null>
-  enable: (config: Encryption, changes: ChangePacket[]) => Promise<void>
+  disableEncryption: (phrase: string) => Promise<void>
 } {
   const base = trimSlash(baseUrl)
   // La clave viaja solo en el encabezado Authorization; nunca en URLs ni en logs.
@@ -105,6 +105,6 @@ export function createCloud(
     async encryption() {
       return profileSchema.parse(await get('/v1/profile')).encryption
     },
-    enable: (config, changes) => post('/v1/encryption', { config, changes }),
+    disableEncryption: (phrase) => post('/v1/decryption', { phrase }),
   }
 }

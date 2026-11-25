@@ -19,8 +19,8 @@ import {
   createCloud,
   linkedOwner,
 } from '../data/cloud'
-import { cycle, encodeChanges, retryDelay, stageInitial, type CloudRow } from '../data/syncEngine'
-import { createEncryption, unlockEncryption, type Encryption } from '../data/crypto'
+import { cycle, retryDelay, stageInitial, type CloudRow } from '../data/syncEngine'
+import { unlockEncryption, type Encryption } from '../data/crypto'
 import { Dialog } from './base'
 
 type Status =
@@ -388,7 +388,9 @@ export function useSync(enabled: boolean) {
       let wrong = false
       const result = await waitCycle(session.key, async () => {
         try {
-          await changeEncryption(phrase)
+          const key = await unlockEncryption(phrase, encryption)
+          secret.current = { config: encryption, key }
+          await syncNow()
         } catch (error) {
           wrong = true
           throw error
@@ -471,35 +473,13 @@ export function useSync(enabled: boolean) {
       } else notify(connectionText[outcome])
     })()
   }, [enabled, loaded, credential, linkOpened])
-  async function changeEncryption(phrase: string) {
-    if (!api || !enabled) return
-    if (encryption) {
-      const key = await unlockEncryption(phrase, encryption)
-      secret.current = { config: encryption, key }
-      await syncNow()
-      return
-    }
-    if (status !== 'Sincronizado')
-      throw new Error('Sincronizá primero antes de activar el cifrado.')
+  async function disableEncryption(phrase: string) {
+    if (!api || !enabled || !encryption) return
     busy.current = true
     try {
-      const { key, config } = await createEncryption(phrase)
-      const rows = await api.pull()
-      const changes = await encodeChanges(
-        rows
-          .filter((r) => r.deleted_at === null)
-          .map((r) => ({
-            id: r.id,
-            collection: r.collection,
-            revision: r.revision,
-            deleted: false,
-            data: r.data as never,
-          })),
-        key,
-      )
-      await api.enable(config, changes)
-      secret.current = { config, key }
-      setEncryption(config)
+      await api.disableEncryption(phrase)
+      secret.current = null
+      setEncryption(null)
     } finally {
       busy.current = false
       await syncNow()
@@ -512,7 +492,7 @@ export function useSync(enabled: boolean) {
     issue,
     agree,
     syncNow,
-    changeEncryption,
+    disableEncryption,
     canSend: cloudConfigured,
     hasKey: Boolean(credential),
     saveKey,
@@ -532,7 +512,6 @@ export type SyncState = ReturnType<typeof useSync>
 export function SyncPanel({ sync }: { sync: SyncState }) {
   const [key, setKey] = useState('')
   const [phrase, setPhrase] = useState('')
-  const [repeat, setRepeat] = useState('')
   const [message, setMessage] = useState('')
   const [busy, setBusy] = useState(false)
   async function action(run: () => Promise<void>, fail: string) {
@@ -611,62 +590,44 @@ export function SyncPanel({ sync }: { sync: SyncState }) {
             </p>
           )}
           <Pairing sync={sync} />
-          <h3>Cifrado de extremo a extremo</h3>
-          {sync.encryption && sync.status !== 'Nube bloqueada' ? (
-            <p className="muted">Cifrado activo para los registros en la nube.</p>
-          ) : (
+          {sync.encryption && (
             <form
               className="stack"
               onSubmit={(e) => {
                 e.preventDefault()
-                if (!sync.encryption && phrase !== repeat) {
-                  setMessage('Las frases tienen que coincidir.')
-                  return
-                }
-                void action(
-                  async () => {
-                    await sync.changeEncryption(phrase)
-                    setPhrase('')
-                    setRepeat('')
-                  },
-                  sync.encryption
-                    ? 'La frase no coincide o no se pudo conectar.'
-                    : 'Sincronizá primero y volvé a intentar. La nube puede haber cambiado durante la activación.',
-                )
+                const currentPhrase = phrase
+                setPhrase('')
+                void action(async () => {
+                  try {
+                    await sync.disableEncryption(currentPhrase)
+                    setMessage('Se desactivó el cifrado de la nube.')
+                  } catch (error) {
+                    if (error instanceof CloudError && error.status === 422) {
+                      setMessage('La frase no coincide. Probá de nuevo.')
+                      return
+                    }
+                    throw error
+                  }
+                }, 'No se pudo desactivar el cifrado. Probá de nuevo.')
               }}
             >
               <p className="muted">
-                Vas a necesitar la frase en cada sesión. Si la perdés, los registros cifrados de la
-                nube no se pueden recuperar.
+                Ingresá tu frase de paso una última vez. La nube conservará tus jornadas y seguirá
+                protegida por tu clave de sincronización.
               </p>
               <label>
                 Frase de paso
                 <input
                   type="password"
-                  autoComplete={sync.encryption ? 'current-password' : 'new-password'}
+                  autoComplete="current-password"
                   value={phrase}
                   required
-                  minLength={12}
+                  maxLength={4096}
                   onChange={(e) => setPhrase(e.target.value)}
                 />
               </label>
-              {!sync.encryption && (
-                <label>
-                  Repetir frase de paso
-                  <input
-                    type="password"
-                    autoComplete="new-password"
-                    value={repeat}
-                    required
-                    minLength={12}
-                    onChange={(e) => setRepeat(e.target.value)}
-                  />
-                </label>
-              )}
               <div className="actions">
-                <button disabled={busy || (!sync.encryption && sync.status !== 'Sincronizado')}>
-                  {sync.encryption ? 'Desbloquear nube' : 'Activar cifrado'}
-                </button>
+                <button disabled={busy}>Desactivar cifrado</button>
               </div>
             </form>
           )}
