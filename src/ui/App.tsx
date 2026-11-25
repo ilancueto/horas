@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import {
   Activity,
@@ -54,6 +54,8 @@ export function App() {
   const [shortcutRequested, setShortcutRequested] = useState(
     () => new URLSearchParams(location.search).get('hoy') === '1',
   )
+  const workspace = useRef<HTMLElement>(null)
+  const initialScroll = useRef(true)
   const sync = useSync(ready && pinReady && (!pin || unlocked))
   const periods = chain(ledger.periods)
   const current = periods.find((p) => p.from <= now && p.to >= now)
@@ -138,6 +140,16 @@ export function App() {
     )
       setDay(requestedDay)
   }
+  useEffect(() => {
+    if (!initialScroll.current || !ready || error || !pinReady || (pin && !unlocked)) return
+    initialScroll.current = false
+    if (shortcutRequested) return
+
+    const currentDay = Array.from(
+      workspace.current?.querySelectorAll('[aria-current="date"]') ?? [],
+    ).find((element) => element.getClientRects().length > 0)
+    currentDay?.scrollIntoView({ behavior: 'instant', block: 'center', inline: 'nearest' })
+  }, [ready, error, pinReady, pin, unlocked, shortcutRequested])
   useEffect(() => {
     if (ready && pinReady && (!pin || unlocked) && shortcutRequested) {
       setShortcutRequested(false)
@@ -267,7 +279,7 @@ export function App() {
           </button>
         </div>
       </header>
-      <main className="workspace" id="contenido">
+      <main className="workspace" id="contenido" ref={workspace}>
         <div className="content" key={view}>
           {view === 'period' && (
             <PeriodView

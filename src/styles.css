@@ -1712,6 +1712,19 @@ input[type='checkbox']:checked::after {
   box-shadow: none;
   background-color: color-mix(in oklch, var(--accent) 6%, transparent);
 }
+.daily tbody tr[aria-current='date'],
+.day-card[aria-current='date'] {
+  box-shadow: inset 4px 0 var(--hl);
+}
+.today-badge {
+  font: 700 0.68rem/1.2 var(--sans);
+  background: var(--hl);
+  color: var(--on-hl);
+}
+.day-card .today-badge {
+  margin-inline-start: 8px;
+  vertical-align: middle;
+}
 .daily thead th {
   border-bottom: 1px solid var(--rule);
 }

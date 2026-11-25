@@ -30,6 +30,19 @@ async function capture(page: Page, info: TestInfo, name: string) {
   )
   await page.screenshot({ path: info.outputPath(name + '.png'), animations: 'disabled' })
 }
+test('al abrir lleva a la jornada actual y la marca como Hoy', async ({ page }) => {
+  await start(page)
+  await page.clock.setFixedTime(new Date('2026-12-12T15:00:00Z'))
+  await page.reload()
+
+  const currentDay = page
+    .getByRole('region', { name: 'Jornadas' })
+    .locator('[aria-current="date"]:visible')
+  await expect(currentDay).toContainText('12')
+  await expect(currentDay.getByText('Hoy', { exact: true })).toBeVisible()
+  await expect(currentDay).toBeInViewport({ ratio: 1 })
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+})
 test('importa el Excel de referencia y lo vuelve a importar sin duplicar', async ({ page }) => {
   test.skip(!existsSync(workbook), 'La planilla original se guarda fuera de Git.')
   await setClock(page)
