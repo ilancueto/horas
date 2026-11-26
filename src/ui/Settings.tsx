@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Clock3, Cloud, FileSpreadsheet, Plus, ShieldCheck, Timer } from 'lucide-react'
 import { clock, decimal, number } from '../domain/dates'
-import { compMinutes, decimalTotals, type DayRow } from '../domain/hours'
+import { compMinutes, compOpeningSeconds, decimalTotals, type DayRow } from '../domain/hours'
 import { ars, extraPay } from '../domain/pay'
 import {
+  compOpeningCentihours,
   defaults,
   emptyLedger,
   emptyPrivate,
@@ -27,6 +28,8 @@ import { checkPin, makePin, requestReminders, type Pin } from '../data/preferenc
 import { Dialog } from './base'
 import { ConnectCloud, connectionText, type SyncState } from './Sync'
 import { TimeField } from './Day'
+
+const hundredthsPerComp = (compMinutes * 100) / 60
 
 function ScheduleFields({
   draft,
@@ -272,6 +275,15 @@ export function Preferences({
     if (focusComps) document.getElementById('saldo-inicial')?.scrollIntoView({ block: 'start' })
   }, [focusComps])
   const [draft, setDraft] = useState(settings)
+  const [openingInput, setOpeningInput] = useState<string | null>(null)
+  const openingValue =
+    openingInput ?? String(decimal(compOpeningSeconds(draft) / 60)).replace('.', ',')
+  const trimmedOpening = openingValue.trim()
+  const parsedOpening = compOpeningCentihours.safeParse(
+    /^(?:\d+(?:[,.]\d{1,2})?)?$/.test(trimmedOpening)
+      ? Math.round(Number(trimmedOpening.replace(',', '.')) * 100)
+      : NaN,
+  )
   const [rate, setRate] = useState(privateData.rate?.toString() ?? '')
   const [enabled, setEnabled] = useState(privateData.rate !== null)
   const [pinValue, setPinValue] = useState('')
@@ -351,22 +363,27 @@ export function Preferences({
             e.preventDefault()
             if (e.currentTarget.querySelector('[aria-invalid=true]')) return
             setError('')
-            if (
-              draft.compSince === null &&
-              (draft.compOpeningDays > 0 || draft.compOpeningMinutes > 0)
-            ) {
+            if (!parsedOpening.success || parsedOpening.data === null) {
+              setError('Ingresá las horas con hasta dos decimales. El máximo es 7.999,99 h.')
+              return
+            }
+            const opening = parsedOpening.data
+            if (opening > 0 && draft.compSince === null) {
               setError('Elegí la fecha del saldo inicial.')
               return
             }
-            if (
-              !Number.isInteger(draft.compOpeningDays) ||
-              draft.compOpeningDays < 0 ||
-              draft.compOpeningDays > 999
-            ) {
-              setError('Los francos disponibles tienen que ser un número entero entre 0 y 999.')
-              return
-            }
-            if (!settingsSchema.safeParse(draft).success || draft.start >= draft.end) {
+            const openingChanged = openingInput !== null || draft.compSince !== settings.compSince
+            // Conserva un equivalente en minutos para las versiones anteriores de la app.
+            const legacyMinutes = Math.min(Math.round((opening * 60) / 100), 1000 * compMinutes - 1)
+            const next = openingChanged
+              ? {
+                  ...draft,
+                  compOpeningCentihours: draft.compSince ? opening : null,
+                  compOpeningDays: Math.floor(legacyMinutes / compMinutes),
+                  compOpeningMinutes: legacyMinutes % compMinutes,
+                }
+              : draft
+            if (!settingsSchema.safeParse(next).success || next.start >= next.end) {
               setError(
                 'Revisá los valores. La salida habitual tiene que ser posterior a la entrada.',
               )
@@ -381,7 +398,7 @@ export function Preferences({
                 return
               }
               const nextPin = clearPin ? null : pinValue ? await makePin(pinValue) : pin
-              await saveSettings(draft)
+              await saveSettings(next)
               await savePrivate({ ...privateData, rate: enabled ? Number(rate) : null })
               await putMeta('pin', nextPin)
               pinChanged(nextPin)
@@ -419,8 +436,8 @@ export function Preferences({
           </div>
           <h4 id="saldo-inicial">Saldo inicial de compensatorios</h4>
           <small>
-            Si ya tenías francos o horas al 100% acumuladas, cargalos acá. Solo se suman las
-            jornadas posteriores a esa fecha.
+            Cada 8 horas al 100% equivalen a un franco. Para un saldo nuevo, se cuentan las jornadas
+            y los francos tomados desde la fecha indicada, inclusive.
           </small>
           <div className="form-grid">
             <label>
@@ -433,31 +450,22 @@ export function Preferences({
               />
             </label>
             <label>
-              Francos disponibles
+              Saldo inicial (horas decimales)
               <input
-                type="number"
-                min={0}
-                max={999}
-                step={1}
-                required
-                aria-label="Francos disponibles"
-                value={draft.compOpeningDays}
-                onChange={(e) => patch({ compOpeningDays: e.target.valueAsNumber || 0 })}
-              />
-            </label>
-            <label>
-              Horas sobrantes al 100%
-              <TimeField
-                value={draft.compOpeningMinutes}
-                label="Horas sobrantes al 100%"
-                save={(minutes) => {
-                  if ((minutes ?? 0) >= compMinutes)
-                    notify('Las horas sobrantes tienen que ser menos de 8:00.')
-                  else patch({ compOpeningMinutes: minutes ?? 0 })
-                }}
+                type="text"
+                inputMode="decimal"
+                placeholder="25,51"
+                value={openingValue}
+                onChange={(e) => setOpeningInput(e.target.value)}
               />
             </label>
           </div>
+          {parsedOpening.success && parsedOpening.data !== null && trimmedOpening && (
+            <small>
+              {Math.floor(parsedOpening.data / hundredthsPerComp)} francos completos ·{' '}
+              {number((parsedOpening.data % hundredthsPerComp) / 100)} h restantes
+            </small>
+          )}
           <label className="check">
             <input
               type="checkbox"

@@ -130,10 +130,12 @@ it('acepta reglas remotas y ajustes locales viejos sin saldo inicial de francos'
 })
 it('reglas remotas de una versión vieja no pisan el saldo inicial local', async () => {
   const server = new MockBackend()
-  const { compSince, compOpeningDays, compOpeningMinutes, ...base } = defaults
+  const { compSince, compOpeningDays, compOpeningMinutes, compOpeningCentihours, ...base } =
+    defaults
   void compSince
   void compOpeningDays
   void compOpeningMinutes
+  void compOpeningCentihours
   server.rows.set(rulesId, {
     id: rulesId,
     collection: 'rules',
@@ -142,23 +144,96 @@ it('reglas remotas de una versión vieja no pisan el saldo inicial local', async
     updated_at: new Date(Date.UTC(2026, 10, 1)).toISOString(),
     deleted_at: null,
   })
-  const local = { ...defaults, compSince: '2026-11-07', compOpeningDays: 2, compOpeningMinutes: 90 }
+  const local = {
+    ...defaults,
+    compSince: '2026-11-10',
+    compOpeningDays: 3,
+    compOpeningMinutes: 91,
+    compOpeningCentihours: 2551,
+  }
   await putMeta('settings', local)
   await cycle(server)
   expect(useHours.getState().settings).toMatchObject({
     start: 480,
-    compSince: '2026-11-07',
+    compSince: '2026-11-10',
+    compOpeningDays: 3,
+    compOpeningMinutes: 91,
+    compOpeningCentihours: 2551,
+  })
+  await server.push([
+    {
+      id: rulesId,
+      collection: 'rules',
+      revision: crypto.randomUUID(),
+      deleted: false,
+      data: {
+        id: rulesId,
+        ...rulesSchema.parse(base),
+        compSince: '2026-11-10',
+        compOpeningDays: 2,
+        compOpeningMinutes: 15,
+      },
+    },
+  ])
+  await cycle(server)
+  expect(useHours.getState().settings).toMatchObject({
     compOpeningDays: 2,
-    compOpeningMinutes: 90,
+    compOpeningMinutes: 15,
+    compOpeningCentihours: null,
   })
 })
 it('al guardar las reglas se sincroniza el saldo inicial', async () => {
   useHours.setState({ settings: defaults })
-  await saveSettings({ compSince: '2026-11-07', compOpeningDays: 2, compOpeningMinutes: 90 })
+  await saveSettings({
+    compSince: '2026-11-10',
+    compOpeningDays: 3,
+    compOpeningMinutes: 91,
+    compOpeningCentihours: 2551,
+  })
   expect((await db.queue.get(rulesId))?.data).toMatchObject({
     id: rulesId,
-    compSince: '2026-11-07',
+    compSince: '2026-11-10',
+    compOpeningDays: 3,
+    compOpeningMinutes: 91,
+    compOpeningCentihours: 2551,
+  })
+})
+it('conserva el saldo decimal recibido si otro dispositivo anterior cambia el horario', async () => {
+  const server = new MockBackend()
+  await putMeta('settings', defaults)
+  const date = '2026-11-10'
+  const opening = { compSince: date, compOpeningDays: 3, compOpeningMinutes: 91 }
+  const data = { id: rulesId, ...rulesSchema.parse({ ...defaults, ...opening }) }
+  const pushRules = (data: unknown) =>
+    server.push([
+      { id: rulesId, collection: 'rules', revision: crypto.randomUUID(), deleted: false, data },
+    ])
+  await pushRules({ ...data, compOpeningCentihours: 2551 })
+  await cycle(server)
+  expect(useHours.getState().settings.compOpeningCentihours).toBe(2551)
+
+  const { compOpeningCentihours, ...legacy } = data
+  void compOpeningCentihours
+  await pushRules({ ...legacy, start: 480 })
+  await cycle(server)
+  expect(useHours.getState().settings).toMatchObject({
+    start: 480,
+    ...opening,
+    compOpeningCentihours: 2551,
+  })
+
+  await pushRules({ ...legacy, compOpeningDays: 2 })
+  await cycle(server)
+  expect(useHours.getState().settings).toMatchObject({
+    ...opening,
     compOpeningDays: 2,
-    compOpeningMinutes: 90,
+    compOpeningCentihours: null,
+  })
+
+  await pushRules(legacy)
+  await cycle(server)
+  expect((await db.records.get(rulesId))?.data).toMatchObject({
+    ...opening,
+    compOpeningCentihours: null,
   })
 })
