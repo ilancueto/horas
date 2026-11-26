@@ -41,7 +41,7 @@ Los feriados de 2026 incluyen los días turísticos publicados para ese año. Pa
 ## Licencias, saldos y calculadora de extras
 
 - **Licencias**: en **Más → Licencias** cargás licencias por enfermedad, por mudanza u otras, con su rango de fechas. Se ven en el calendario, en el resumen anual y en el resumen para RRHH, cada una con su color.
-- **Saldos** muestra las horas y los francos compensatorios disponibles, además de las vacaciones del año. En **Cargar saldo inicial** ingresá las horas decimales y la fecha del saldo. Desde esa fecha inclusive, se suman las horas al 100% y se descuentan 8 h por cada franco tomado. El saldo inicial se sincroniza con las reglas de cálculo.
+- **Saldos** muestra las horas y los francos compensatorios disponibles, además de las vacaciones del año. En **Ajustar saldo inicial** ingresá las horas decimales y la fecha del saldo. Desde esa fecha inclusive, se suman las horas al 100% y se descuentan 8 h por cada franco tomado. El saldo inicial se sincroniza con las reglas de cálculo.
 - **Calculadora de extras**: en **Más → Calculadora de extras** elegís un período y ves cuánto suman las horas al 50% y al 100% con tu valor hora. Es una estimación con las horas decimales del período.
 - El contador del período y el resumen anual muestran solo horas extra. El resumen para RRHH y los archivos exportados siguen mostrando las horas normales.
 - El valor hora queda solo en el dispositivo: no entra en las exportaciones ni en la sincronización, salvo que lo incluyas a propósito en el backup JSON.

@@ -248,10 +248,10 @@ small,
 /* Diálogos: una boleta con cabecera oscura */
 .dialog {
   position: fixed;
-  inset: 0;
+  inset: var(--keyboard-top, 0px) 0 var(--keyboard-bottom, 0px);
   margin: auto;
   width: min(570px, calc(100% - 32px));
-  max-height: calc(100dvh - 32px);
+  max-height: min(calc(100dvh - 32px), calc(var(--keyboard-height, 100dvh) - 8px));
   overflow: auto;
   background: var(--surface);
   color: var(--ink);
@@ -1184,8 +1184,60 @@ small,
   align-items: center;
   gap: 8px;
 }
-.balances .absence-summary {
+.balance-card {
+  display: grid;
+  gap: 14px;
+}
+.balance-overview {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--wash);
+}
+.balance-total strong {
+  font-variant-numeric: tabular-nums;
+}
+.balance-detail {
+  margin: 0;
+  border-block: 1px solid var(--line);
+}
+.balance-detail > div {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  padding: 6px 0;
+}
+.balance-detail > div + div {
+  border-top: 1px solid var(--line);
+}
+.balance-detail dd {
+  margin: 0 0 0 auto;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.balance-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+.balance-actions .primary {
+  grid-column: 1 / -1;
+}
+.balance-leave {
+  gap: 10px;
+}
+.balance-leave .title-line {
+  align-items: center;
   margin-bottom: 0;
+}
+.balance-leave .year-picker {
+  width: 6rem;
+}
+.balance-leave .balance-big strong {
+  font-size: 2.8rem;
 }
 .balance-big {
   font-size: 1.1rem;
@@ -1206,21 +1258,22 @@ small,
 .balance-progress progress {
   appearance: none;
   width: 100%;
-  max-width: 520px;
-  height: 18px;
+  height: 8px;
   border: 0;
-  border-radius: 0;
-  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+  border-radius: 999px;
+  background: var(--line);
   overflow: hidden;
 }
 .balance-progress progress::-webkit-progress-bar {
-  background: repeating-linear-gradient(90deg, var(--line) 0 2px, transparent 2px 7px);
+  background: var(--line);
 }
 .balance-progress progress::-webkit-progress-value {
-  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+  background: var(--accent);
+  border-radius: 999px;
 }
 .balance-progress progress::-moz-progress-bar {
-  background: repeating-linear-gradient(90deg, var(--accent) 0 2px, transparent 2px 7px);
+  background: var(--accent);
+  border-radius: 999px;
 }
 .balance-link {
   display: flex;
@@ -1547,10 +1600,10 @@ small,
     text-transform: none;
   }
   .dialog {
-    inset: auto 0 0;
+    inset: auto 0 var(--keyboard-bottom, 0px);
     width: 100%;
     max-width: none;
-    max-height: 94dvh;
+    max-height: min(94dvh, calc(var(--keyboard-height, 100dvh) - 8px));
     border-radius: 10px 10px 0 0;
     border-bottom: 0;
     padding-bottom: max(22px, env(safe-area-inset-bottom));
