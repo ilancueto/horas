@@ -97,8 +97,8 @@
   box-sizing: border-box;
 }
 html {
-  /* Sensación de app en el celu: sin zoom por doble toque ni rebote al llegar al borde. */
-  touch-action: manipulation;
+  /* Conserva el desplazamiento táctil sin activar los gestos de zoom en la app. */
+  touch-action: pan-x pan-y;
   overscroll-behavior: none;
   -webkit-text-size-adjust: 100%;
   -webkit-tap-highlight-color: transparent;
@@ -107,6 +107,12 @@ body {
   margin: 0;
   min-width: 320px;
 }
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
 @media (pointer: coarse) {
   /* iOS hace zoom solo al enfocar un campo con letra menor a 16 px. */
   input:not([type='checkbox']):not([type='radio']),
@@ -114,12 +120,6 @@ body {
   textarea {
     font-size: max(1rem, 16px);
   }
-}
-button,
-input,
-select,
-textarea {
-  font: inherit;
 }
 button,
 select {
@@ -253,6 +253,7 @@ small,
   width: min(570px, calc(100% - 32px));
   max-height: min(calc(100dvh - 32px), calc(var(--keyboard-height, 100dvh) - 8px));
   overflow: auto;
+  touch-action: pan-x pan-y;
   background: var(--surface);
   color: var(--ink);
   border: 1.5px solid var(--rule);
@@ -1003,6 +1004,7 @@ small,
 }
 .calendar-day {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   justify-items: start;
   align-content: start;
   min-width: 0;
@@ -1806,6 +1808,20 @@ input[type='checkbox']:checked::after {
 }
 .calendar-day[aria-current] .hours {
   background: color-mix(in oklch, white 55%, transparent);
+}
+@media (max-width: 720px) {
+  .calendar {
+    gap: 4px;
+  }
+  .calendar-day {
+    padding-inline: 3px;
+  }
+  .calendar-day .hours {
+    justify-self: center;
+    padding-inline: 2px;
+    font-size: clamp(0.625rem, 2.7vw, 0.8rem);
+    white-space: nowrap;
+  }
 }
 .chart {
   border-radius: 999px;
