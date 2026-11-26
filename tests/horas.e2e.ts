@@ -253,6 +253,36 @@ for (const orientation of ['vertical', 'horizontal'] as const) {
     await expect(dialog.getByRole('textbox', { name: 'Salida' })).toHaveValue('10:00')
   })
 }
+test('el calendario angosto contiene las horas y mantiene el desplazamiento táctil', async ({
+  page,
+}, info) => {
+  test.skip(info.project.name !== 'celular')
+  await page.setViewportSize({ width: 320, height: 700 })
+  await start(page)
+  await page.getByRole('button', { name: 'Cargar hoy' }).click()
+  const dialog = page.getByRole('dialog')
+  await dialog.getByLabel('Entrada', { exact: true }).fill('0800')
+  await dialog.getByLabel('Salida', { exact: true }).fill('1815')
+  await dialog.getByLabel('Descanso (min)').fill('0')
+  await dialog.getByLabel('Guardia').check()
+  await dialog.getByRole('button', { name: 'Guardar jornada' }).click()
+  await expect(dialog).toHaveCount(0)
+  await nav(page, 'Calendario').click()
+  const today = page.getByRole('button', { name: /24\/11\/2026 · 10:15 horas/ })
+  await expect(today).toHaveAttribute('aria-current', 'date')
+  await expect(today.getByText('Guardia', { exact: true })).toBeVisible()
+  const geometry = await today.evaluate((cell) => {
+    const { left, right } = cell.getBoundingClientRect()
+    return [...cell.querySelectorAll('strong, .hours, .badge')].every((child) => {
+      const bounds = child.getBoundingClientRect()
+      return bounds.left >= left + 1 && bounds.right <= right - 1
+    })
+  })
+  expect(geometry).toBe(true)
+  await expect(page.locator('html')).toHaveCSS('touch-action', 'pan-x pan-y')
+  await today.click()
+  await expect(dialog).toHaveCSS('touch-action', 'pan-x pan-y')
+})
 test('muestra saldos de francos y vacaciones', async ({ page }) => {
   await start(page)
   await nav(page, 'Saldos').click()
