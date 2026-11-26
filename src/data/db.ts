@@ -91,7 +91,16 @@ async function readSettings() {
   if (!rules.success) return local
   const { id, ...shared } = rules.data
   void id
-  return { ...local, ...shared }
+  const settings = { ...local, ...shared }
+  if (
+    shared.compOpeningCentihours === undefined &&
+    (settings.compSince !== local.compSince ||
+      settings.compOpeningDays !== local.compOpeningDays ||
+      settings.compOpeningMinutes !== local.compOpeningMinutes)
+  ) {
+    settings.compOpeningCentihours = null
+  }
+  return settings
 }
 export async function reload() {
   const [ledger, settings] = await Promise.all([readLedger(), readSettings()])

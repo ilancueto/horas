@@ -181,6 +181,9 @@ describe('saldo de francos', () => {
     ]
     expect(compBalance({ ...emptyLedger, entries }, rules, now)).toEqual({
       opening: 0,
+      openingMinutes: 0,
+      creditedMinutes: 1550,
+      balanceMinutes: 1550,
       accumulated: 1550,
       earned: 3,
       remainder: 110,
@@ -188,6 +191,25 @@ describe('saldo de francos', () => {
       taken: 0,
       available: 3,
       earnedDates: ['2026-11-01', '2026-11-08', '2026-11-15'],
+    })
+  })
+  it('usa el saldo decimal exacto y cuenta los movimientos desde la fecha inclusive', () => {
+    const compSince = '2026-11-10'
+    const settings = { ...rules, early: 'double' as const, compSince, compOpeningCentihours: 2551 }
+    const entries = [
+      shift('2026-11-09', 345, 465),
+      shift(compSince, 345, 465),
+      shift('2026-11-11', 465, 525),
+      shift('2026-11-23', 345, 465),
+    ]
+    const comps = [comp('2026-11-09'), comp(compSince), comp('2026-11-23')]
+    expect(compBalance({ ...emptyLedger, entries, comps }, settings, now)).toMatchObject({
+      opening: 3,
+      openingMinutes: 1530.6,
+      creditedMinutes: 120,
+      balanceMinutes: 1170.6,
+      taken: 1,
+      available: 2,
     })
   })
   it('parte del saldo inicial e ignora jornadas anteriores o del mismo día', () => {

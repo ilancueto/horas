@@ -61,6 +61,24 @@ export function preferRemote(local: Row | undefined, remote: CloudRow, pending: 
     !pending && (!local?.updatedAt || compareTimestamp(local.updatedAt, remote.updated_at) <= 0)
   )
 }
+function preserveDecimalOpening(data: Row['data'], old: Row | undefined): Row['data'] {
+  const previous = rulesRecordSchema.safeParse(old?.deleted ? undefined : old?.data)
+  if (!previous.success || previous.data.compOpeningCentihours === undefined) return data
+  const incoming = rulesRecordSchema.parse(data)
+  if (incoming.compOpeningCentihours !== undefined) return data
+  const opening = previous.data
+  const replaced =
+    (incoming.compSince !== undefined && incoming.compSince !== opening.compSince) ||
+    (incoming.compOpeningDays !== undefined &&
+      incoming.compOpeningDays !== opening.compOpeningDays) ||
+    (incoming.compOpeningMinutes !== undefined &&
+      incoming.compOpeningMinutes !== opening.compOpeningMinutes)
+  return {
+    ...opening,
+    ...incoming,
+    compOpeningCentihours: replaced ? null : opening.compOpeningCentihours,
+  }
+}
 export async function cycle(backend: Backend, key?: CryptoKey, active = () => true) {
   const pending = await db.queue.toArray()
   if (!active()) return
@@ -86,10 +104,11 @@ export async function cycle(backend: Backend, key?: CryptoKey, active = () => tr
       if (!preferRemote(old, row, queued.get(row.id))) continue
       if (!row.data && !old) continue
       if (old?.revision === row.revision && old.updatedAt === row.updated_at) continue
+      const data = row.data ?? old!.data
       updates.push({
         id: row.id,
         collection: row.collection,
-        data: row.data ?? old!.data,
+        data: row.collection === 'rules' && row.data ? preserveDecimalOpening(data, old) : data,
         deleted: Boolean(row.deleted_at),
         revision: row.revision,
         updatedAt: row.updated_at,

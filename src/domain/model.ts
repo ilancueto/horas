@@ -7,6 +7,7 @@ const duration = z.number().int().min(0).max(1440)
 const compSince = day.nullable()
 const compOpeningDays = z.number().int().min(0).max(999)
 const compOpeningMinutes = z.number().int().min(0).max(479)
+export const compOpeningCentihours = z.number().int().min(0).max(799_999).nullable()
 export const settingsSchema = z.object({
   start: minute,
   end: minute,
@@ -26,6 +27,7 @@ export const settingsSchema = z.object({
   compSince: compSince.default(null),
   compOpeningDays: compOpeningDays.default(0),
   compOpeningMinutes: compOpeningMinutes.default(0),
+  compOpeningCentihours: compOpeningCentihours.default(null),
 })
 export const defaults: Settings = {
   start: 465,
@@ -46,6 +48,7 @@ export const defaults: Settings = {
   compSince: null,
   compOpeningDays: 0,
   compOpeningMinutes: 0,
+  compOpeningCentihours: null,
 }
 export type Settings = z.infer<typeof settingsSchema>
 export const rulesId = '30000000-0000-4000-8000-000000000001'
@@ -67,6 +70,7 @@ export const rulesSchema = settingsSchema
     compSince: compSince.optional(),
     compOpeningDays: compOpeningDays.optional(),
     compOpeningMinutes: compOpeningMinutes.optional(),
+    compOpeningCentihours: compOpeningCentihours.optional(),
   })
 export const rulesRecordSchema = rulesSchema
   .extend({ id })

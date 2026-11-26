@@ -1,9 +1,17 @@
 import { useState } from 'react'
 import { Palmtree, Repeat2 } from 'lucide-react'
-import { clock } from '../domain/dates'
+import { decimal, number } from '../domain/dates'
 import { compBalance, compMinutes, leaveBalance } from '../domain/hours'
 import { useHours } from '../data/db'
 import { AbsenceForm } from './Absences'
+
+const preciseHours = new Intl.NumberFormat('es-AR', { maximumFractionDigits: 3 })
+function balanceHours(minutes: number) {
+  const rounded = decimal(minutes)
+  return rounded % (compMinutes / 60) === 0 && rounded * 60 !== minutes
+    ? preciseHours.format(minutes / 60)
+    : number(rounded)
+}
 
 export function Balances({
   today,
@@ -44,13 +52,16 @@ export function Balances({
           {Math.abs(comps.available) === 1 ? 'disponible' : 'disponibles'}
         </p>
         {comps.available < 0 && <p className="warning">Tomaste más francos de los ganados.</p>}
+        <p>Saldo actual {balanceHours(comps.balanceMinutes)} h</p>
         <p className="muted">
-          Ganados {comps.earned} · Tomados {comps.taken} · Saldo inicial {comps.opening}
+          Ganadas {number(decimal(comps.creditedMinutes))} h · Descontadas{' '}
+          {number(decimal(comps.taken * compMinutes))} h · Saldo inicial{' '}
+          {number(decimal(comps.openingMinutes))} h
         </p>
         <div className="balance-progress">
           <p>
-            Acumulado al 100%: {clock(comps.remainder)} — faltan {clock(comps.missing)} para el
-            próximo franco
+            {balanceHours(comps.remainder)} h acumuladas para el próximo franco · faltan{' '}
+            {balanceHours(comps.missing)} h
           </p>
           <progress
             max={compMinutes}

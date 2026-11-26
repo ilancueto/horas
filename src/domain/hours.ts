@@ -196,8 +196,18 @@ export const overlapsLeave = (leaves: Ledger['leaves'], range: Ledger['leaves'][
   leaves.some((l) => l.id !== range.id && l.from <= range.to && l.to >= range.from)
 
 export const compMinutes = 480
+const secondsPerCentihour = 36
+const compSeconds = compMinutes * 60
+export function compOpeningSeconds(settings: Settings) {
+  return settings.compOpeningCentihours === null
+    ? (settings.compOpeningDays * compMinutes + settings.compOpeningMinutes) * 60
+    : settings.compOpeningCentihours * secondsPerCentihour
+}
 export type CompBalance = {
   opening: number
+  openingMinutes: number
+  creditedMinutes: number
+  balanceMinutes: number
   accumulated: number
   earned: number
   remainder: number
@@ -207,32 +217,41 @@ export type CompBalance = {
   earnedDates: string[]
 }
 export function compBalance(ledger: Ledger, settings: Settings, now: string): CompBalance {
-  const { compSince, compOpeningDays, compOpeningMinutes } = settings
-  const after = (date: string) => compSince === null || date > compSince
+  const { compSince, compOpeningCentihours } = settings
+  const counts = (date: string) =>
+    date <= now &&
+    (compSince === null ||
+      date > compSince ||
+      (date === compSince && compOpeningCentihours !== null))
   const holidays = holidayMap(ledger)
   const entries = ledger.entries
-    .filter((entry) => after(entry.date) && entry.date <= now)
+    .filter((entry) => counts(entry.date))
     .sort((a, b) => a.date.localeCompare(b.date))
-  let accumulated = compOpeningMinutes
+  const openingSeconds = compOpeningSeconds(settings)
+  const opening = Math.floor(openingSeconds / compSeconds)
+  const openingRemainder = openingSeconds % compSeconds
+  let accumulated = openingRemainder
   const earnedDates: string[] = []
   for (const entry of entries) {
-    const before = Math.floor(accumulated / compMinutes)
-    accumulated += calculate(entry, settings, holidays).double
-    for (let k = before; k < Math.floor(accumulated / compMinutes); k++)
+    const before = Math.floor(accumulated / compSeconds)
+    accumulated += calculate(entry, settings, holidays).double * 60
+    for (let k = before; k < Math.floor(accumulated / compSeconds); k++)
       earnedDates.push(entry.date)
   }
-  const remainder = accumulated % compMinutes
-  const taken = ledger.comps.filter(
-    (comp) => comp.taken !== null && comp.taken <= now && after(comp.taken),
-  ).length
+  const remainder = accumulated % compSeconds
+  const taken = ledger.comps.filter((comp) => comp.taken !== null && counts(comp.taken)).length
+  const creditedSeconds = accumulated - openingRemainder
   return {
-    opening: compOpeningDays,
-    accumulated,
+    opening,
+    openingMinutes: openingSeconds / 60,
+    creditedMinutes: creditedSeconds / 60,
+    balanceMinutes: (openingSeconds + creditedSeconds - taken * compSeconds) / 60,
+    accumulated: accumulated / 60,
     earned: earnedDates.length,
-    remainder,
-    missing: compMinutes - remainder,
+    remainder: remainder / 60,
+    missing: (compSeconds - remainder) / 60,
     taken,
-    available: compOpeningDays + earnedDates.length - taken,
+    available: opening + earnedDates.length - taken,
     earnedDates,
   }
 }
