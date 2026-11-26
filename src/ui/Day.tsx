@@ -103,7 +103,11 @@ export function DayEditor({
   const warnings = entryWarnings(entry, period, ledger.entries)
   const patch = (value: Partial<Entry>) => setEntry((e) => ({ ...e, ...value }))
   return (
-    <Dialog title={fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' })} close={close}>
+    <Dialog
+      title={fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' })}
+      close={close}
+      fitKeyboard
+    >
       {deleting ? (
         <DeleteActions
           cancel={() => setDeleting(false)}

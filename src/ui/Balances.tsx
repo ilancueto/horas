@@ -27,6 +27,8 @@ export function Balances({
   const [year, setYear] = useState(today.slice(0, 4))
   const comps = compBalance(ledger, settings, today)
   const leaves = leaveBalance(ledger.leaves, year, settings.annualLeave)
+  const credited = comps.creditedMinutes
+  const deducted = comps.taken * compMinutes
   const years = [
     ...new Set([
       today.slice(0, 4),
@@ -43,25 +45,23 @@ export function Balances({
   return (
     <section className="stack balances">
       <h1>Saldos</h1>
-      <section className="panel stack" aria-labelledby="saldo-francos">
+      <section className="panel balance-card" aria-labelledby="saldo-francos">
         <h2 id="saldo-francos">
           <Repeat2 size={19} aria-hidden="true" /> Francos compensatorios
         </h2>
-        <p className={'balance-big' + (comps.available < 0 ? ' warning' : '')}>
-          <strong>{comps.available}</strong>{' '}
-          {Math.abs(comps.available) === 1 ? 'disponible' : 'disponibles'}
-        </p>
-        {comps.available < 0 && <p className="warning">Tomaste más francos de los ganados.</p>}
-        <p>Saldo actual {balanceHours(comps.balanceMinutes)} h</p>
-        <p className="muted">
-          Ganadas {number(decimal(comps.creditedMinutes))} h · Descontadas{' '}
-          {number(decimal(comps.taken * compMinutes))} h · Saldo inicial{' '}
-          {number(decimal(comps.openingMinutes))} h
-        </p>
+        <div className="balance-overview">
+          <p className={'balance-big' + (comps.available < 0 ? ' warning' : '')}>
+            <strong>{comps.available}</strong>{' '}
+            {Math.abs(comps.available) === 1 ? 'franco disponible' : 'francos disponibles'}
+          </p>
+          <p className="balance-total">
+            Saldo actual <strong>{balanceHours(comps.balanceMinutes)} h</strong>
+          </p>
+          {comps.available < 0 && <p className="warning">Tomaste más francos de los ganados.</p>}
+        </div>
         <div className="balance-progress">
           <p>
-            {balanceHours(comps.remainder)} h acumuladas para el próximo franco · faltan{' '}
-            {balanceHours(comps.missing)} h
+            Te faltan <strong>{balanceHours(comps.missing)} h</strong> para el próximo franco
           </p>
           <progress
             max={compMinutes}
@@ -69,18 +69,38 @@ export function Balances({
             aria-label="Progreso hacia el próximo franco"
           />
         </div>
-        <div className="actions">
+        <dl className="balance-detail">
+          <div>
+            <dt>Saldo inicial</dt>
+            <dd>{balanceHours(comps.openingMinutes)} h</dd>
+          </div>
+          <div>
+            <dt>Ganadas</dt>
+            <dd>
+              {credited > 0 ? '+' : ''}
+              {balanceHours(credited)} h
+            </dd>
+          </div>
+          <div>
+            <dt>Tomadas</dt>
+            <dd>
+              {deducted > 0 ? '−' : ''}
+              {balanceHours(deducted)} h
+            </dd>
+          </div>
+        </dl>
+        <div className="balance-actions">
           <button className="primary" onClick={() => setForm(true)}>
             Registrar franco tomado
           </button>
-          <button onClick={openSettings}>Cargar saldo inicial</button>
           <button onClick={openComps}>Ver lista</button>
+          <button onClick={openSettings}>Ajustar saldo inicial</button>
         </div>
       </section>
-      <section className="panel stack" aria-labelledby="saldo-vacaciones">
+      <section className="panel balance-card balance-leave" aria-labelledby="saldo-vacaciones">
         <div className="title-line">
           <h2 id="saldo-vacaciones">
-            <Palmtree size={19} aria-hidden="true" /> Vacaciones {year}
+            <Palmtree size={19} aria-hidden="true" /> Vacaciones
           </h2>
           <select
             className="year-picker"
@@ -93,20 +113,13 @@ export function Balances({
             ))}
           </select>
         </div>
-        <div className="absence-summary">
-          {(
-            [
-              [settings.annualLeave, 'Disponibles'],
-              [leaves.used, 'Tomados'],
-              [leaves.remaining, 'Saldo'],
-            ] as const
-          ).map(([n, label]) => (
-            <div className="tile" key={label}>
-              <span>{label}</span>
-              <strong>{n}</strong>
-            </div>
-          ))}
-        </div>
+        <p className={'balance-big' + (leaves.remaining < 0 ? ' warning' : '')}>
+          <strong>{leaves.remaining}</strong>{' '}
+          {Math.abs(leaves.remaining) === 1 ? 'día disponible' : 'días disponibles'}
+        </p>
+        <p className="muted">
+          {leaves.used} {leaves.used === 1 ? 'día tomado' : 'días tomados'}
+        </p>
       </section>
       {form && (
         <AbsenceForm

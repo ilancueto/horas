@@ -200,8 +200,64 @@ test('carga licencias por tipo', async ({ page }) => {
     expect(result.violations.map((v) => [v.id, v.nodes.map((n) => n.target)])).toEqual([])
   }
 })
+for (const orientation of ['vertical', 'horizontal'] as const) {
+  test(`mantiene visible el editor con el teclado móvil en ${orientation}`, async ({
+    page,
+  }, info) => {
+    test.skip(info.project.name !== 'celular')
+    const horizontal = orientation === 'horizontal'
+    if (horizontal) await page.setViewportSize({ width: 844, height: 390 })
+    const height = horizontal ? 212 : 320
+    const top = 36
+    await start(page)
+    await page.getByRole('button', { name: 'Cargar hoy' }).click()
+    const dialog = page.getByRole('dialog')
+    const entrada = dialog.getByRole('textbox', { name: 'Entrada' })
+    await entrada.fill('0800')
+    await page.evaluate(
+      ({ height, top }) => {
+        const viewport = window.visualViewport!
+        Object.defineProperties(viewport, {
+          height: { configurable: true, value: height },
+          offsetTop: { configurable: true, value: top },
+        })
+        viewport.dispatchEvent(new Event('resize'))
+      },
+      { height, top },
+    )
+    await expect
+      .poll(() => dialog.evaluate((element) => element.getBoundingClientRect().bottom))
+      .toBeLessThanOrEqual(height + top + 1)
+    const salida = dialog.getByRole('textbox', { name: 'Salida' })
+    await salida.fill('1000')
+    const descanso = dialog.getByLabel('Descanso (min)')
+    await descanso.fill('0')
+    await expect
+      .poll(() =>
+        descanso.evaluate((input, visibleBottom) => {
+          const label = input.closest('label')!.getBoundingClientRect()
+          const header = input.closest('dialog')!.querySelector('header')!.getBoundingClientRect()
+          return label.top >= header.bottom && label.bottom <= visibleBottom
+        }, height + top),
+      )
+      .toBe(true)
+    await dialog.getByRole('button', { name: 'Guardar jornada' }).click()
+    await expect(dialog).toHaveCount(0)
+    await page.evaluate(() => {
+      const viewport = window.visualViewport!
+      Reflect.deleteProperty(viewport, 'height')
+      Reflect.deleteProperty(viewport, 'offsetTop')
+    })
+    await page.getByRole('button', { name: 'Cargar hoy' }).click()
+    await expect(dialog.getByRole('textbox', { name: 'Entrada' })).toHaveValue('08:00')
+    await expect(dialog.getByRole('textbox', { name: 'Salida' })).toHaveValue('10:00')
+  })
+}
 test('muestra saldos de francos y vacaciones', async ({ page }) => {
   await start(page)
+  await nav(page, 'Saldos').click()
+  const comps = page.getByRole('region', { name: 'Francos compensatorios' })
+  await expect(comps).toContainText('0 francos disponibles')
   await nav(page, 'Más').click()
   await page.getByRole('button', { name: 'Ajustes', exact: true }).click()
   const opening = page.getByLabel('Saldo inicial (horas decimales)')
@@ -224,10 +280,14 @@ test('muestra saldos de francos y vacaciones', async ({ page }) => {
   await page.getByRole('button', { name: 'Guardar jornada' }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
   await nav(page, 'Saldos').click()
-  const comps = page.getByRole('region', { name: 'Francos compensatorios' })
-  await expect(comps).toContainText('3 disponibles')
+  await expect(comps).toContainText('3 francos disponibles')
   await expect(comps).toContainText('Saldo actual 27,51 h')
-  await expect(comps).toContainText('Ganadas 2 h · Descontadas 0 h · Saldo inicial 25,51 h')
+  await expect(
+    comps.locator('dl > div').filter({ hasText: 'Saldo inicial' }).locator('dd'),
+  ).toHaveText('25,51 h')
+  await expect(comps.locator('dl > div').filter({ hasText: 'Ganadas' }).locator('dd')).toHaveText(
+    '+2 h',
+  )
   await expect(comps).toContainText('faltan 4,49 h')
   await expect(
     page.getByRole('progressbar', { name: 'Progreso hacia el próximo franco' }),
@@ -238,19 +298,28 @@ test('muestra saldos de francos y vacaciones', async ({ page }) => {
   await page.getByLabel('Fecha tomado').fill('2026-11-23')
   await page.getByRole('button', { name: 'Guardar', exact: true }).click()
   await expect(page.getByRole('dialog')).toHaveCount(0)
-  await expect(comps).toContainText('2 disponibles')
+  await expect(comps).toContainText('2 francos disponibles')
   await expect(comps).toContainText('Saldo actual 19,51 h')
-  await expect(comps).toContainText('Descontadas 8 h')
-  const leaves = page.getByRole('region', { name: 'Vacaciones 2026' })
+  await expect(comps.locator('dl > div').filter({ hasText: 'Tomadas' }).locator('dd')).toHaveText(
+    '−8 h',
+  )
+  const leaves = page.getByRole('region', { name: 'Vacaciones', exact: true })
   await expect(leaves.getByLabel('Año de vacaciones')).toHaveValue('2026')
-  await expect(leaves.locator('.tile', { hasText: 'Saldo' })).toContainText('14')
-  await page.getByRole('button', { name: 'Cargar saldo inicial' }).click()
+  await expect(leaves).toContainText('14 días disponibles')
+  await expect(leaves).toContainText('0 días tomados')
+  await page.getByRole('button', { name: 'Ajustar saldo inicial' }).click()
   await expect(opening).toHaveValue('25,51')
   await close(page)
   await nav(page, 'Más').click()
   await page.getByRole('button', { name: 'Compensatorio', exact: true }).click()
   await page.getByRole('button', { name: 'Ver saldo' }).click()
   await expect(page.getByRole('heading', { name: 'Saldos', level: 1 })).toBeVisible()
+  await page.getByRole('button', { name: 'Ajustar saldo inicial' }).click()
+  await opening.fill('0')
+  await page.getByRole('button', { name: 'Guardar ajustes' }).click()
+  await expect(page.getByRole('dialog')).toHaveCount(0)
+  await expect(comps).toContainText(/Saldo actual [-−]6 h/)
+  await expect(comps).toContainText('Tomaste más francos de los ganados.')
 })
 test('calcula el valor de las extras', async ({ page }, info) => {
   await start(page)
